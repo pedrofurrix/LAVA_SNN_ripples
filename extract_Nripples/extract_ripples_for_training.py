@@ -1,5 +1,8 @@
 import sys
-sys.path.insert(0, 'liset_tk')
+import os
+liset_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../liset_tk'))
+
+sys.path.insert(0, liset_path)
 
 from liset_aux import ripples_std, middle
 from signal_aid import most_active_channel, bandpass_filter
@@ -11,7 +14,7 @@ import time
 
 
 # Define general variables
-parent = '../../Amigo2_1_hippo_2019-07-11_11-57-07_1150um' #path to recording session
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS\Amigo2_1_hippo_2019-07-11_11-57-07_1150um" # Modify this to your data path folder
 std, mean = ripples_std(parent)
 processed_ripples = []
 downsampled_fs = int(sys.argv[1])
@@ -20,7 +23,7 @@ bandpass = np.array(sys.argv[2].split('_')).astype(int)
 
 # Set the length of the signals 
 # It has to be suitable for the maximum events posible, so it will be the mean_len + std
-samples_per_signal = round((round(mean, 3) + round(std, 3)) * downsampled_fs)
+samples_per_signal = round((mean + std) * downsampled_fs)
 half_S = int(samples_per_signal/2)
 
 # True positives

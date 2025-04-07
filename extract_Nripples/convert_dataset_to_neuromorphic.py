@@ -15,7 +15,8 @@ y_size = int(sys.argv[1])
 samples_len = true_positives.shape[1]
 y_num_samples = y_size
 cutoff = cutoff_amplitude(true_positives)
-num_samples = 1794 # length of the true positives
+
+num_samples = true_positives.shape[0] #1794 # length of the true positives # acho que devia ser true_positives.shape[0]
 
 n_true_positives = np.zeros((num_samples, y_num_samples, samples_len))
 n_true_negatives = np.zeros((num_samples, y_num_samples, samples_len))

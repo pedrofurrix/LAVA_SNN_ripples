@@ -1,6 +1,6 @@
 ###########################################################################################
 #                                                                                         #
-#                         Deloped by: Marcos Oriol Pagonabarraga                          #
+#                         Developed by: Marcos Oriol Pagonabarraga                          #
 #                           Contact: marcos.oriol.p@gmail.com                             #
 #                                                                                         #
 ###########################################################################################
@@ -17,11 +17,12 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import sys
-sys.path.insert(0, '../utils/')
+utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../utils/'))
+sys.path.insert(0,utils_path)
 from eval import modelEval
-sys.path.insert(0, '../runSNN/')
+models_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../runSNN/'))
+sys.path.insert(0, models_path)
 from models import torchSNN
 
 import tensorflow as tf
@@ -341,7 +342,9 @@ class liset_tk():
         except Exception as err:
             print(f'No data available for shank {shank}\n\n{err}')
             return 
+        
         raw_data = self.load_dat(data_path, channels, numSamples=self.numSamples)
+
         if hasattr(raw_data, 'shape'):
             self.data = self.clean(raw_data, downsample, normalize)
             self.duration = self.data.shape[0]/self.fs
@@ -475,4 +478,157 @@ class liset_tk():
         else:
             self.fig.savefig(fname, transparent=not background, bbox_inches='tight')
                 
+    @plain_plot
+    @hide_y_ticks_on_offset
+    def downsample_several(self,event, 
+                offset=0, 
+                extend=0, 
+                delimiter=False, 
+                show=True, 
+                filtered=[], 
+                title='', 
+                label='', 
+                ch=False,
+                ylim=False,
+                line_color=False,
+                show_ground_truth=False, 
+                show_predictions=False, 
+                plain=False,
+                downsampled_fs=[]):
+        """
+        Plot different downsample methods.
 
+        Parameters:
+        - event ([start_s,end_s]): Start and End Times of the plot (s)
+        - offset (float): Offset between channels for visualization.
+        - extend (float _ s): Extend the plotted time range before and after the ripple.
+        - delimiter (bool): Whether to highlight the ripple area.
+
+        Returns:
+        - fig (matplotlib.figure.Figure): The generated figure.
+        - ax (matplotlib.axes.Axes): The axes object containing the plot.
+        """
+        all_fs=[self.original_fs] + downsampled_fs  # Include original fs
+        n = len(all_fs)
+        print(all_fs)
+        if show:
+            fig, axes = plt.subplots(nrows=n, figsize=(10, 3.2 * n), sharex=True, constrained_layout=True)
+        
+        if n == 1:
+            axes= [axes]  # Ensure axes is iterable if there's only one subplot
+        for i,downsampled_f in enumerate(all_fs):
+            ax=axes[i]
+            if downsampled_f==self.original_fs:
+                downsampled_data=self.data
+
+                title_plt=f'Original Data ({downsampled_f} Hz)'
+            else:
+                downsampled_data=downsample_data(self.data, self.original_fs, downsampled_f)
+                title_plt=f'Downsampled Data ({downsampled_f} Hz)'	
+
+            prop = self.original_fs/downsampled_f
+            interval = deepcopy(event)
+            handles = []
+            labels = []
+            interval_samples=[int(interval[0]*downsampled_f), int(interval[1]*downsampled_f)]
+
+            try:
+                if extend != 0:
+                    if (interval[0] - extend) < 0:
+                        interval_samples[0] = int(self.start/prop)
+                    else:
+                        interval_samples[0] = interval_samples[0] - extend*downsampled_f
+
+                    if (interval[1] + extend)*downsampled_f > (self.start+self.numSamples/prop):
+                        interval_samples[1] = int((self.start+ self.numSamples)/prop)
+                    else:
+                        interval_samples[1] = interval_samples[1] + extend*downsampled_f
+                interval=[int(x) for x in interval_samples]
+            
+            except IndexError:
+                print('IndexError')
+                print(f'There no data available for the selected samples.\nLength of loaded data: {int(self.numSamples/prop)}')
+                return None, None
+            
+                # Define window data
+            self.window_interval = interval
+            ripples=self.ripples_GT/prop       
+            mask = (ripples[:, 1] >= interval[0]) & (ripples[:, 0] <= interval[1])
+            window_ripples = ripples[mask]
+
+            interval_data = downsampled_data[interval[0]: interval[1]][:]
+            self.window = deepcopy(interval_data)
+            
+            time_vector = np.linspace(interval[0] / downsampled_f, interval[1] / downsampled_f, interval_data.shape[0])
+            
+            for i, chann in enumerate(interval_data.transpose()):
+                if filtered:
+                    bandpass = filtered
+                    chann = bandpass_filter(chann, bandpass, downsampled_f)
+                    self.window[:, i] = chann
+                if show:
+                    if ch:
+                        if i in ch:
+                            if line_color:
+                                ax.plot(time_vector, chann + i * offset, line_color)
+                            else:
+                                ax.plot(time_vector, chann + i * offset)
+                    else:
+                        if line_color:
+                            ax.plot(time_vector, chann + i * offset, line_color)
+                        else:
+                            ax.plot(time_vector, chann + i * offset)
+                
+                if ylim:
+                    ax.set_ylim(ylim)
+                    
+
+            max_val = np.max(self.window.reshape((self.window.shape[0]*self.window.shape[1]))) + offset*8
+            min_val = np.min(self.window.reshape((self.window.shape[0]*self.window.shape[1])))
+
+            if delimiter and show:
+                if extend > 0:
+                    ripple_area = [time_vector[round(extend)], time_vector[-round(extend)]]
+                    if not label:
+                        label='Event area'
+                    fill_DEL = ax.fill_between(ripple_area, min_val, max_val, color="tab:blue", alpha=0.2)
+                    handles.append(fill_DEL)
+                    labels.append(label)
+                else:
+                    if self.verbose:
+                        print('Delimiter not applied because there is no extend.')
+
+            if show_ground_truth:
+                if hasattr(self.ripples_GT, 'dtype'):
+                    for ripple in window_ripples:
+                        fill_GT = ax.fill_between([ripple[0] / downsampled_f, ripple[1] / downsampled_f],  min_val, max_val, color="tab:red", alpha=0.3)
+
+                if 'fill_GT' in locals():
+                    handles.append(fill_GT)
+                    labels.append('Ground truth' if not label else label)
+
+            if show_predictions:
+                if hasattr(self, 'prediction_idxs'):
+                    mask = (self.prediction_idxs[:, 1] >= interval[0]) & (self.prediction_idxs[:, 0] <= interval[1])
+                    self.prediction_times_from_window = self.prediction_times[mask]
+                    for times in self.prediction_times_from_window:
+                        fill_PRED = ax.fill_between([times[0], times[1]], min_val, max_val, color="tab:blue", alpha=0.3)
+
+                if 'fill_PRED' in locals():
+                    handles.append(fill_PRED)
+                    labels.append(f'{self.model_type} predict')
+
+            ax.set_xlabel('Time (s)')
+            ax.set_ylabel('Amplitude (mV)')
+
+            if not len(handles) == 0:        
+                ax.legend(handles, labels)
+
+            text = ax.set_title(title_plt, loc='center', fontfamily='serif', fontsize=12, fontweight='bold')
+            ax.grid(True)
+        self.fig = fig
+        self.axes = axes
+        plt.suptitle(f"Testing Downsampling at Different Frequencies", fontsize=16, fontweight='bold', fontfamily='serif')
+
+        if show:
+            return fig, axes

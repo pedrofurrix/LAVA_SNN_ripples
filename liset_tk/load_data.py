@@ -122,7 +122,7 @@ def downsample_data(data, fs, downsampled_fs):
 
     # Upsampling
 	elif fs < downsampled_fs:
-		print("Original sampling rate below 1250 Hz!")
+		print("Original sampling rate below downsample frequency!")
 		return None
 
     # Change from int16 to float16 if necessary
