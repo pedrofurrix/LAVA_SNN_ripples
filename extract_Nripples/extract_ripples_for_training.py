@@ -34,7 +34,8 @@ half_S = int(samples_per_signal/2)
 print(samples_per_signal)
 
 # Several BP filters (Pedro)
-bp_filters=np.array([[1,10],[100,250],[250,500]])
+# bp_filters=np.array([[1,10],[100,250],[250,500]])
+bp_filters=np.array([[100,250]])
 for bandpass in bp_filters:
     # True positives
     print('Extracting True Positive events ...')
@@ -107,6 +108,9 @@ for bandpass in bp_filters:
                 # Apply the mask to get only values that are not true positives
                 filtered_arr = arr[mask]
 
+                # Remove values that would cause a ValueError due to not having enough samples
+                filtered_arr = filtered_arr[filtered_arr + samples_per_signal <= liset.data.shape[0]]
+
                 # Now, you can sample random values from filtered_arr
                 random_samples = np.random.choice(filtered_arr, size=num_samples_per_chunk, replace=False).astype(int)
                 for sample in random_samples:
@@ -119,11 +123,13 @@ for bandpass in bp_filters:
                 keep_looping = False
 
     # Convert to numpy array and save the values
-    print(true_negatives)
-    print(len(true_negatives))
-    print(len(true_negatives[0]))
+    for i in range(len(true_negatives)):
+        if len(true_negatives[i]) != samples_per_signal:
+            print('Signal length not equal to samples_per_signal!')
+            print(true_negatives[i])
+            print(i)
+            print(len(true_negatives[i]))
     true_negatives = np.array(true_negatives)
-    print(true_negatives.shape)
     save_negatives=os.path.join(save_dir, f'true_negatives_{bandpass[0]}_{bandpass[1]}Hz.npy')
     np.save(save_negatives, arr=true_negatives, allow_pickle=True)
     print('Saved True Negatives!')
