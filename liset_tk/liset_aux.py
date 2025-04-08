@@ -18,14 +18,14 @@ def load_ripple_times(path):
     - ripples (numpy.ndarray): A NumPy array containing the ripple times, where each row represents a ripple event  (start, end).
     """
 
-    ripples_file_path = f'{path}/ripples.csv'
+    ripples_file_path = os.path.join(path, 'ripples.csv')
     if os.path.exists(ripples_file_path):
         ripples = pd.read_csv(ripples_file_path, sep = ' ').to_numpy()
         if type(ripples[0][0]) is str:
             ripples = pd.read_csv(ripples_file_path, sep = ',').to_numpy()
         return ripples
     else:
-        print(f'File {ripples_file_path} does not exist. \nEnsure to put the path where riplpes.csv live in.') 
+        print(f'File {ripples_file_path} does not exist. \nEnsure to put the path where ripples.csv lives in.') 
         return None  
     
     
@@ -180,13 +180,15 @@ def format_training_ripples(ripples, std, mean):
 
 
 def ripples_std(parent_path):
+    
     """
     Reads the ripples.csv file from each dataset in the parent path, and calculates the std and the mean of the ripple lengths.
     """
+
     ripples_list = []  # Create an empty list to store arrays
 
     for i in os.listdir(parent_path):
-        ripples_list.append(load_ripple_times(f'{parent_path}{i}'))  # Append arrays to the list
+        ripples_list.append(load_ripple_times(os.path.join(parent_path,i)))  # Append arrays to the list
 
     # Concatenate arrays in the list into a single numpy array
     ripples = np.concatenate(ripples_list)

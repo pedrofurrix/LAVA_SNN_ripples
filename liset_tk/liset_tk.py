@@ -685,34 +685,35 @@ class liset_tk():
 
         for j,downsampled_f in enumerate(all_fs):
             if downsampled_f == self.fs:
-                title = f"Original ({downsampled_f} Hz)"
+                # title = f"Original ({downsampled_f} Hz)"
                 data=self.data
             else:
-                title = f"Downsampled ({downsampled_f} Hz)"
+                # title = f"Downsampled ({downsampled_f} Hz)"
                 data=downsample_data(self.data, self.fs, downsampled_f)
             
-            print(downsampled_f)
-            fig.text(
-                0.1 + j * (0.8 / len(all_fs)),  # X position
-                1.0,                             # Y position (top of figure)
-                title,
-                ha='center',
-                va='bottom',
-                fontsize=12,
-                fontweight='bold',
-                fontfamily='serif'
-            )
+            # print(downsampled_f)
+            # fig.text(
+            #     0.1 + j * (0.8 / len(all_fs)),  # X position
+            #     1.0,                             # Y position (top of figure)
+            #     title,
+            #     ha='center',
+            #     va='bottom',
+            #     fontsize=12,
+            #     fontweight='bold',
+            #     fontfamily='serif'
+            # )
 
             for i,bandpass in enumerate(bp_filters):
                 ax=axes[i,j]
                 print(bandpass)
                 if not bandpass:
-                    title_plt=f'Original Data'
-                    filtered=data
-                    print("Not filtered")
+                    title_plt = f'Original Data({downsampled_f} Hz)'
+                    filtered_data = data.copy()
                 else:
+                    filtered_data = np.zeros_like(data)
                     for idx in range(data.shape[1]):
-                        filtered[:,idx]=bandpass_filter(data[:,idx],bandpass=bandpass,fs=downsampled_f,order=order)
+                        filtered_data[:, idx] = bandpass_filter(data[:, idx], bandpass=bandpass, fs=downsampled_f, order=order)
+                    title_plt = f'Bandpassed Data ({bandpass[0]}–{bandpass[1]} Hz)'
                     
                     print(f"Filtered successfully - {bandpass[0]}-{bandpass[1]} Hz")
                     title_plt=f'Bandpassed Data ({bandpass[0]}_{bandpass[1]} Hz)'	
@@ -748,7 +749,7 @@ class liset_tk():
                 mask = (ripples[:, 1] >= interval[0]) & (ripples[:, 0] <= interval[1])
                 window_ripples = ripples[mask]
 
-                interval_data = filtered[interval[0]: interval[1]][:]
+                interval_data = filtered_data[interval[0]: interval[1]][:]
                 self.window = deepcopy(interval_data)
                 
                 time_vector = np.linspace(interval[0]/downsampled_f, interval[1]/downsampled_f, interval_data.shape[0])
@@ -814,9 +815,9 @@ class liset_tk():
 
                 text = ax.set_title(title_plt, loc='center', fontfamily='serif', fontsize=12, fontweight='bold')
                 ax.grid(True)
-            self.fig = fig
-            self.axes = axes
-            plt.suptitle(f"Testing Filtering at Different Frequencies", fontsize=16, fontweight='bold', fontfamily='serif')
+        self.fig = fig
+        self.axes = axes
+        plt.suptitle(f"Testing Filtering at Different Frequencies", fontsize=16, fontweight='bold', fontfamily='serif')
 
-            if show:
-                return fig, axes
+        if show:
+            return fig, axes

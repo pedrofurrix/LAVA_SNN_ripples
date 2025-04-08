@@ -14,11 +14,15 @@ import time
 
 
 # Define general variables
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS\Amigo2_1_hippo_2019-07-11_11-57-07_1150um" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 std, mean = ripples_std(parent)
 processed_ripples = []
-downsampled_fs=2500
+downsampled_fs= 4000
 chunk_size     = 10000000
+
+# Define saving directory
+save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset")
+os.makedirs(save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
 
 # downsampled_fs = int(sys.argv[1])
 # bandpass = np.array(sys.argv[2].split('_')).astype(int)
@@ -27,18 +31,17 @@ chunk_size     = 10000000
 # It has to be suitable for the maximum events posible, so it will be the mean_len + std
 samples_per_signal = round((mean + std) * downsampled_fs)
 half_S = int(samples_per_signal/2)
-
+print(samples_per_signal)
 
 # Several BP filters (Pedro)
-bp_filters=np.array([1,10],[100,250],[250,500])
-
+bp_filters=np.array([[1,10],[100,250],[250,500]])
 for bandpass in bp_filters:
     # True positives
     print('Extracting True Positive events ...')
     for i in os.listdir(parent):
         print(i)
         # Restart loop variables
-        dataset_path = f'{parent}{i}'
+        dataset_path = os.path.join(parent, i)
         start = 0
         keep_looping = True
         # Loop until all ripples are saved in the list
@@ -61,7 +64,8 @@ for bandpass in bp_filters:
                 start = 0
 
     processed_ripples = np.array(processed_ripples)
-    np.save(f'train/dataset/true_positives_{bandpass[0]}_{bandpass[1]}Hz.npy', arr=processed_ripples, allow_pickle=True)
+    save_positives=os.path.join(save_dir, f'true_positives_{bandpass[0]}_{bandpass[1]}Hz.npy')
+    np.save(save_positives, arr=processed_ripples, allow_pickle=True)
     print('Saved True Positives!')
     time.sleep(1)
 
@@ -70,13 +74,13 @@ for bandpass in bp_filters:
     print('Extracting True Negative events ...')
     true_negatives = []
     num_samples_per_chunk = 150
-    margin_from_ripple = 10000
+    margin_from_ripple = int(10000/4000*downsampled_fs) # 2.5s # Sample margin from ripple to avoid overlap with true positives # We should choose a value that depends on the frequency
 
     for i in os.listdir(parent): 
         print(i) 
         start = 0
         keep_looping = True
-        dataset_path = f'{parent}{i}'
+        dataset_path = os.path.join(parent, i)
 
         # Loop until all ripples are saved in the list
         while keep_looping:
@@ -115,6 +119,11 @@ for bandpass in bp_filters:
                 keep_looping = False
 
     # Convert to numpy array and save the values
+    print(true_negatives)
+    print(len(true_negatives))
+    print(len(true_negatives[0]))
     true_negatives = np.array(true_negatives)
-    np.save(f'train/dataset/true_negatives_{bandpass[0]}_{bandpass[1]}Hz.npy', arr=true_negatives, allow_pickle=True)
+    print(true_negatives.shape)
+    save_negatives=os.path.join(save_dir, f'true_negatives_{bandpass[0]}_{bandpass[1]}Hz.npy')
+    np.save(save_negatives, arr=true_negatives, allow_pickle=True)
     print('Saved True Negatives!')
