@@ -35,7 +35,7 @@ print(samples_per_signal)
 
 # Several BP filters (Pedro)
 # bp_filters=np.array([[1,10],[100,250],[250,500]])
-bp_filters=np.array([[100,250]])
+bp_filters=np.array([[250,500]])
 for bandpass in bp_filters:
     # True positives
     print('Extracting True Positive events ...')
