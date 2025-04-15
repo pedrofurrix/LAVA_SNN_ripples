@@ -26,14 +26,11 @@ refractory=0 # seconds
 bandpass=[100,250]
 min_threshold=1.0
 save=True
-
+chunk_size=10000000
 def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
                  time_max=time_max,window_size=window_size,sample_ratio=sample_ratio,scaling_factor=scaling_factor,
-                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save):
+                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,chunk_size=chunk_size):
    
-    # Define general variables
-    chunk_size  = 10000000
-    
     # Define saving directory
     print('Extracting UP/Down Spikes ...')
     for i in os.listdir(parent):
@@ -44,6 +41,7 @@ def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
         # Load data from Liset and initialize threshold
         liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
         threshold=np.zeros(liset.data.shape[1])
+        
         spikified_chunks=[]
 
         # Calculate the threshold for each channel
@@ -91,7 +89,7 @@ def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
             save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size)
             print(f'Saved UP-DOWN DataSet - {i}')
 
-def save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size):
+def save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size=chunk_size):
     # Save the parameters used for the conversion
     params = {
         'time_max': time_max,
@@ -185,10 +183,22 @@ def overlaps_with_any_ripple(candidate_start, candidate_end, ripples_GT):
     return False
 
 
-def plot_channels(spikified=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,id=0,ripple=7,channels=[],diff_plots=False):
+def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,id=0,ripple=7,channels=[],diff_plots=False):
     
     datasets=os.listdir(parent)
-    
+    dataset_path=os.path.join(parent,datasets[id])
+    liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+    print("Loaded LFPs:",dataset_path)
+    if filtered is None:
+        filtered_liset=np.zeros((int(liset.data.shape[0]),int(liset.data.shape[1])))
+        for channel in channels:
+            print("Channel:", channel+1)
+            filtered_liset[:,channel]=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
+            # print("Max:",max(filtered_liset[:,channel]),"\n Min:",min(filtered_liset[:,channel]))
+    else:
+        filtered_liset=filtered
+        print("Filtered loaded")
+
     if spikified is None:
         path=os.path.join(save_dir,datasets[id],f"{downsampled_fs}", f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
         up_down= np.load(path)
@@ -197,16 +207,11 @@ def plot_channels(spikified=None,save_dir=save_dir,bandpass=bandpass,downsampled
         up_down=spikified
         print("Spikified loaded")
 
-    dataset_path=os.path.join(parent,datasets[id])
-    liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
-    print("Loaded LFPs:",dataset_path)
+    print(f'Shape of the filtered data: {filtered_liset.shape}')
+    print(f'Shape of the UP/DN data: {up_down.shape}')
+   
 
-    filtered_liset=np.zeros((int(liset.data.shape[0]),int(liset.data.shape[1])))
-    
-    for channel in channels:
-        print("Channel:", channel+1)
-        filtered_liset[:,channel]=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
-        print("Max:",max(filtered_liset[:,channel]),"\n Min:",min(filtered_liset[:,channel]))
+  
 
     if not ripple:
         chunk_length=int(0.04*downsampled_fs)    
@@ -492,6 +497,57 @@ def test_nochunks(channels=[3,4,7],parent=parent,downsampled_fs=downsampled_fs,s
         os.makedirs(sub_save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
         save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
         np.save(save_data, arr=spikified, allow_pickle=True)
-        save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size)
+        save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs)
         print(f'Saved UP-DOWN DataSet - {i}')
     return spikified,filtered
+
+def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
+                 time_max=time_max,window_size=window_size,sample_ratio=sample_ratio,scaling_factor=scaling_factor,
+                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,chunk_size=chunk_size):
+    
+    # Define saving directory
+    print('Extracting UP/Down Spikes ...')
+    # for i in os.listdir(parent):
+    i=os.listdir(parent)[0]
+    print(i)
+    # Restart loop variables
+    dataset_path = os.path.join(parent, i)
+
+    # Load data from Liset and initialize threshold
+    liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+    threshold=np.zeros(liset.data.shape[1])
+    
+    spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
+    filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
+
+    # Calculate the threshold for each channel
+    for channel in range(liset.data.shape[1]):
+        channel_signal = liset.data[:time_max*downsampled_fs, channel]
+        filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+        threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
+    print("Thresholds:",threshold)
+
+    sub_save_dir=os.path.join(save_dir, f"{i}",f"{downsampled_fs}")
+
+    if hasattr(liset, 'data'):
+        print(f'Shape of the loaded data: {liset.data.shape}')
+        # Loop throough the ripples found in liset class (the ones in the range of the selected samples)
+        for channel in range(liset.data.shape[1]):
+            print("Channel:", channel+1)
+            # Find the peaks above the threshold, extract channel data, filter and get the up/down spikes
+            channel_signal = liset.data[:, channel]
+            filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+            filtered[:,channel]=filtered_signal
+            spikified[:, channel, :]=up_down_channel(filtered_signal,threshold[channel],liset.fs,refractory)
+    else:
+        print("There is no data :(")
+
+    if save:
+        # Save the spikified data	
+        os.makedirs(sub_save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
+        save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+        np.save(save_data, arr=spikified, allow_pickle=True)
+        save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size)
+        print(f'Saved UP-DOWN DataSet - {i}')
+    else:
+        return spikified,filtered
