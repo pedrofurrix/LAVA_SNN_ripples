@@ -308,7 +308,7 @@ class liset_tk():
             if numSamples:
                 raw = f.read(numSamples)
             else:
-                raw = f.read(self.file_len - self.start)
+                raw = f.read(self.file_len - start)
             data = np.frombuffer(raw, dtype=np.int16)
             data = RAW2ORDERED(data, channels)
             return data

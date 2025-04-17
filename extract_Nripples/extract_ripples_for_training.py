@@ -30,6 +30,7 @@ os.makedirs(save_dir, exist_ok=True)  # <-- creates directory if it doesn't exis
 # Set the length of the signals 
 # It has to be suitable for the maximum events posible, so it will be the mean_len + std
 samples_per_signal = round((mean + std) * downsampled_fs)
+
 half_S = int(samples_per_signal/2)
 print(samples_per_signal)
 
