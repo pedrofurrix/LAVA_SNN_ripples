@@ -16,8 +16,11 @@ import time
 import json
 from matplotlib.lines import Line2D
 
+#### LAB PC
+# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+### HOME PC
+parent=r"D:\neurospark_mat\CNN_TRAINING_SESSIONS"
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
 time_max=10 # seconds
@@ -117,12 +120,39 @@ def save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,re
     with open(save_path, 'w') as f:
         json.dump(params, f, indent=4)  # optional: indent=4 for readability
 
-def plot_ripple_no_ripple(save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,id=0,ripple=7,channels=[],diff_plots=True):
+def plot_ripple_no_ripple(spikified,filtered,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,id=0,ripple=7,channels=[],diff_plots=True):
     datasets=os.listdir(parent)
-    up_down= np.load(os.path.join(save_dir,datasets[id],f"{downsampled_fs}", f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy'))
+
     dataset_path=os.path.join(parent,datasets[id])
+    up_down_path=os.path.join(save_dir,datasets[id],f"{downsampled_fs}")
     liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+    print("Loaded LFPs:",dataset_path)
+
+    if filtered is None:
+        filtered_liset=np.zeros((int(liset.data.shape[0]),int(liset.data.shape[1])))
+        for channel in channels:
+            print("Channel:", channel+1)
+            filtered_liset[:,channel]=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
+            # print("Max:",max(filtered_liset[:,channel]),"\n Min:",min(filtered_liset[:,channel]))
+    else:
+        filtered_liset=filtered
+        print("Filtered Loaded")
+
+    if spikified is None:
+        path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+        up_down= np.load(path)
+        print("Loaded UP/DN SPikes:", path)
+    else:
+        up_down=spikified
+        print("Spikified Loaded")
     
+    with open(os.path.join(up_down_path, f'params_{bandpass[0]}_{bandpass[1]}.json'), 'r') as f:
+        parameters=json.load(f)
+
+    thresholds=parameters["threshold"]
+    print(f'Shape of the filtered data: {filtered_liset.shape}')
+    print(f'Shape of the UP/DN data: {up_down.shape}')
+   
     if not ripple:
         chunk_length=int(0.04*downsampled_fs)    
         max_start = liset.data.shape[0] - chunk_length
@@ -138,18 +168,31 @@ def plot_ripple_no_ripple(save_dir=save_dir,bandpass=bandpass,downsampled_fs=dow
         ripple_ids=liset.ripples_GT[ripple]
         title=f"Ripple {ripple} "
 
-    signal=liset.data[ripple_ids[0]:ripple_ids[1],:]
+    signal=filtered_liset[ripple_ids[0]:ripple_ids[1],:]
     up_down_ripple=up_down[ripple_ids[0]:ripple_ids[1],:,:]
-    time=np.arange(0,up_down_ripple.shape[0])/downsampled_fs
+    time=np.arange(ripple_ids[0],ripple_ids[1])/downsampled_fs
+
     for channel in channels:
-        filtered_signal=bandpass_filter(signal[:,channel], bandpass=bandpass, fs=liset.fs)
+        for channel in channels:
+            reconstructed_signal=np.zeros(up_down_ripple.shape[0])
+            reconstructed_signal[0]=signal[0,channel]
+            for t in range(1, up_down_ripple.shape[0]):
+                spike_plus = up_down_ripple[t, channel,0]
+                spike_minus = up_down_ripple[t, channel,1]
+                if spike_plus == 1:
+                    reconstructed_signal[t] = reconstructed_signal[t - 1] + thresholds[channel]
+                elif spike_minus == 1:
+                    reconstructed_signal[t] = reconstructed_signal[t - 1] - thresholds[channel]
+                else:
+                    reconstructed_signal[t] = reconstructed_signal[t - 1] 
         if diff_plots:
             # Plot
             plt.subplots(2,1,figsize=(12, 8),sharex=True)
             plt.suptitle(f"{title} - Channel {channel+1}")
             plt.subplot(211)
             plt.title("Filtered Signal")
-            plt.plot(time, filtered_signal, label='Original Signal', color='black')
+            plt.plot(time, signal[:,channel], label='Original Signal', color='black')
+            plt.plot(time, reconstructed_signal, label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
 
             # Overlay positive spikes
             plt.subplot(212)
@@ -167,10 +210,18 @@ def plot_ripple_no_ripple(save_dir=save_dir,bandpass=bandpass,downsampled_fs=dow
         else:
             plt.suptitle(f"{title} - Channel {channel+1}")
             plt.figure(figsize=(12, 4))
-            plt.plot(time, filtered_signal, label='Original Signal', color='black')
-            peak=np.max(filtered_signal)
-            trough=np.min(filtered_signal)
-            mean=np.mean(filtered_signal)
+            plt.plot(time, signal[:,channel], label='Original Signal', color='black')
+            plt.plot(time, reconstructed_signal, label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
+            
+            if not ripple:
+                peak=max(np.max(signal[:,channel]),0.1)
+                trough=min(np.min(signal[:,channel]),-0.1)
+            else:
+                peak=max(np.max(signal[:,channel]),0.5)
+                trough=min(np.min(signal[:,channel]),-0.5)
+
+            mean=np.mean(signal[:,channel])
+     
             plt.vlines(time[up_down_ripple[:,channel,0] == 1],mean,peak, alpha=0.5,
                     color='red', label='Positive Spikes' ,lw=0.5)
             plt.vlines(time[up_down_ripple[:,channel,1] == 1], trough,mean, alpha=0.5,
@@ -251,6 +302,7 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
     
     datasets=os.listdir(parent)
     dataset_path=os.path.join(parent,datasets[id])
+    up_down_path=os.path.join(save_dir,datasets[id],f"{downsampled_fs}")
     liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
     print("Loaded LFPs:",dataset_path)
     if filtered is None:
@@ -264,18 +316,21 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
         print("Filtered Loaded")
 
     if spikified is None:
-        path=os.path.join(save_dir,datasets[id],f"{downsampled_fs}", f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+        path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
         up_down= np.load(path)
         print("Loaded UP/DN SPikes:", path)
     else:
         up_down=spikified
         print("Spikified Loaded")
+    
+    with open(os.path.join(up_down_path, f'params_{bandpass[0]}_{bandpass[1]}.json'), 'r') as f:
+        parameters=json.load(f)
 
+    thresholds=parameters["threshold"]
     print(f'Shape of the filtered data: {filtered_liset.shape}')
     print(f'Shape of the UP/DN data: {up_down.shape}')
    
 
-  
 
     if not ripple:
         chunk_length=int(0.04*downsampled_fs)    
@@ -307,11 +362,24 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
 
 
     for channel in channels:
+        reconstructed_signal=np.zeros(up_down_ripple.shape[0])
+        reconstructed_signal[0]=signal[0,channel]
+        for t in range(1, up_down_ripple.shape[0]):
+            spike_plus = up_down_ripple[t, channel,0]
+            spike_minus = up_down_ripple[t, channel,1]
+            if spike_plus == 1:
+                reconstructed_signal[t] = reconstructed_signal[t - 1] + thresholds[channel]
+            elif spike_minus == 1:
+                reconstructed_signal[t] = reconstructed_signal[t - 1] - thresholds[channel]
+            else:
+                reconstructed_signal[t] = reconstructed_signal[t - 1] 
+                
         if diff_plots:
             ax=axes[channel,0]
             # Plot
             ax.set_title("Filtered Signal")
             ax.plot(time, signal[:,channel], label='Original Signal', color='black')
+            ax.plot(time, reconstructed_signal, label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
             ax=axes[channel,1]
             ax.set_title("UP/Down Spikes")
             ax.vlines(time[up_down_ripple[:,channel,0] == 1], 0.5,1.5, alpha=0.5,
@@ -325,7 +393,8 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
             ax=axes[int(channel // 2),int(channel % 2)]
             ax.set_title(f"Channel {channel+1}")
             ax.plot(time, signal[:,channel], label='Original Signal', color='black')
-    
+            ax.plot(time, reconstructed_signal, label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
+
             if not ripple:
                 peak=max(np.max(signal[:,channel]),0.1)
                 trough=min(np.min(signal[:,channel]),-0.1)
@@ -345,8 +414,9 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
     legend_elements = [
     Line2D([0], [0], color='black', lw=1, label='Filtered Signal'),
     Line2D([0], [0], color='red', lw=1, label='Positive Spikes'),
-    Line2D([0], [0], color='blue', lw=1, label='Negative Spikes')
+    Line2D([0], [0], color='blue', lw=1, label='Negative Spikes'),
+    Line2D([0], [0], color='green', lw=1, label='Reconstructed Signal'),
     ]
 
-    fig.legend(handles=legend_elements, loc='upper center', ncol=3, bbox_to_anchor=(0.5, 1.02))
+    fig.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5, 1.02))
     plt.show()
