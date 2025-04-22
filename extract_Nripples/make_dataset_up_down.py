@@ -17,10 +17,10 @@ import json
 from matplotlib.lines import Line2D
 
 #### LAB PC
-# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 
 ### HOME PC
-parent=r"D:\neurospark_mat\CNN_TRAINING_SESSIONS"
+# parent=r"D:\neurospark_mat\CNN_TRAINING_SESSIONS"
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
 time_max=10 # seconds
@@ -420,3 +420,182 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
 
     fig.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5, 1.02))
     plt.show()
+
+def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save):
+    """
+
+    Evaluate the encoding of the UP/DOWN spikes
+
+    """
+    metrics={}
+    ############## Load the data ##################
+    datasets=os.listdir(parent)
+    
+    for dataset in datasets:
+        metrics[dataset]={}
+        dataset_path=os.path.join(parent,dataset)
+        up_down_path=os.path.join(save_dir,dataset,f"{downsampled_fs}")
+        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+        print("Loaded LFPs:",dataset_path)
+        if filtered is None:
+            filtered_liset=np.zeros((int(liset.data.shape[0]),int(liset.data.shape[1])))
+            channels=[i for i in range(liset.data.shape[1])]
+            for channel in channels:
+                print("Channel:", channel+1)
+                filtered_liset[:,channel]=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
+        else:
+            filtered_liset=filtered
+            print("Filtered Loaded")
+
+        if spikified is None:
+            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+            up_down= np.load(path)
+            print("Loaded UP/DN SPikes:", path)
+        else:
+            up_down=spikified
+            print("Spikified Loaded")
+        
+        with open(os.path.join(up_down_path, f'params_{bandpass[0]}_{bandpass[1]}.json'), 'r') as f:
+            parameters=json.load(f)
+            thresholds=parameters["threshold"]
+            metrics[dataset]["parameters"]=parameters
+        print(f'Shape of the filtered data: {filtered_liset.shape}')
+        print(f'Shape of the UP/DN data: {up_down.shape}')
+
+        # Reconstruct the signal
+        reconstructed_signal=np.zeros((up_down.shape[0],up_down.shape[1]))
+
+        ripples=liset.ripples_GT
+
+        for channel in channels:
+            metrics[dataset][channel]={}
+            reconstructed_signal[0,channel]=filtered_liset[0,channel]
+            # Loop through the up_down data and reconstruct the signal
+            for t in range(1, up_down.shape[0]):
+                spike_plus = up_down[t, channel,0]
+                spike_minus = up_down[t, channel,1]
+                if spike_plus == 1:
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel] + thresholds[channel]
+                elif spike_minus == 1:
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel] - thresholds[channel]
+                else:
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel]
+
+        # Calculate error metrics between the original and reconstructed signal
+        for channel in channels:
+            s_full = filtered_liset[:, channel]
+            r_full = reconstructed_signal[:, channel]
+            spikes_full = up_down[:, channel, 0] + up_down[:, channel, 1]
+
+            # Calculate metrics
+            metrics[dataset][channel]["general"]={
+                "SNR": calculate_snr(s_full, r_full),
+                "RMSE": calculate_rmse(s_full, r_full),
+                "R_squared": calculate_r_squared(s_full, r_full),
+                "AFR": calculate_average_spike_rate(spikes_full)
+            }
+
+            # Calculate metrics for ripples
+            # --- Ripple metrics (average across ripple windows)
+            snrs, rmses, r2s, afrs = [], [], [], []
+
+            for ripple in ripples:
+                start, end = ripple[0], ripple[1]
+                s = s_full[start:end]
+                r = r_full[start:end]
+                spikes = spikes_full[start:end]
+
+                snrs.append(calculate_snr(s, r))
+                rmses.append(calculate_rmse(s, r))
+                r2s.append(calculate_r_squared(s, r))
+                afrs.append(calculate_average_spike_rate(spikes))
+
+            # Store averaged ripple metrics
+            if snrs:  # in case ripples is empty
+                metrics[dataset][channel]["ripples"] = {
+                    "SNR": float(np.mean(snrs)),
+                    "RMSE": float(np.mean(rmses)),
+                    "R_squared": float(np.mean(r2s)),
+                    "AFR": float(np.mean(afrs))
+                }
+            else:
+                metrics[dataset][channel]["ripples"] = {
+                    "SNR": None,
+                    "RMSE": None,
+                    "R_squared": None,
+                    "AFR": None
+                }
+        metrics[dataset]["average_channels"]={
+            "SNR": float(np.mean([metrics[dataset][channel]["general"]["SNR"] for channel in channels])),
+            "RMSE": float(np.mean([metrics[dataset][channel]["general"]["RMSE"] for channel in channels])),
+            "R_squared": float(np.mean([metrics[dataset][channel]["general"]["R_squared"] for channel in channels])),
+            "AFR": float(np.mean([metrics[dataset][channel]["general"]["AFR"] for channel in channels]))
+        }
+        metrics[dataset]["average_ripples"]={
+            "SNR": float(np.mean([metrics[dataset][channel]["ripples"]["SNR"] for channel in channels])),
+            "RMSE": float(np.mean([metrics[dataset][channel]["ripples"]["RMSE"] for channel in channels])),
+            "R_squared": float(np.mean([metrics[dataset][channel]["ripples"]["R_squared"] for channel in channels])),
+            "AFR": float(np.mean([metrics[dataset][channel]["ripples"]["AFR"] for channel in channels]))
+        }
+    # Save the metrics
+    if save:
+        os.makedirs(save_dir, exist_ok=True)
+        ############## Save the metrics ##################	
+        metrics_path=os.path.join(save_dir,f"metrics_{downsampled_fs}.json")
+        with open(metrics_path, 'w') as f:
+            json.dump(metrics, f, indent=4)  # optional: indent=4 for readability
+        print(f"Metrics saved in {metrics_path}")
+    else:
+        return metrics
+
+
+
+
+def calculate_snr(original, reconstructed):
+    """
+    Calculate the Signal-to-Noise Ratio (SNR) between the original and reconstructed signals.
+    The SNR is calculated as the ratio of the power of the original signal to the power of the noise (difference between original and reconstructed signals).
+    """
+    # Ensure inputs are numpy arrays
+    s = np.asarray(original)
+    r = np.asarray(reconstructed)
+
+    # Compute the power of the original signal
+    power_signal = np.mean(s ** 2)
+
+    # Compute the power of the noise (difference)
+    power_noise = np.mean((s - r) ** 2)
+
+    # Avoid division by zero
+    if power_noise == 0:
+        return float('inf')  # Perfect reconstruction
+
+    # Compute SNR in dB
+    snr_db = 20 * np.log10(power_signal / power_noise)
+    return snr_db
+
+
+def calculate_rmse(original, reconstructed):
+    error=np.sqrt(np.mean((reconstructed-original) ** 2))
+    return error
+
+def calculate_r_squared(original, reconstructed):  
+    s = np.asarray(original)
+    r = np.asarray(reconstructed)
+
+    ss_res = np.sum((s - r) ** 2)
+    ss_tot = np.sum((s - np.mean(s)) ** 2)
+
+    if ss_tot == 0:
+        return 1.0 if ss_res == 0 else -np.inf  # Edge case: constant signal
+
+    r_squared = 1 - (ss_res / ss_tot)
+    return r_squared
+
+def calculate_average_spike_rate(spike_train,downsampled_fs=downsampled_fs):  
+    sp = np.asarray(spike_train)
+    afr = np.sum(np.abs(sp)) / len(sp)
+    # Convert to Hz
+    afr = afr * downsampled_fs
+
+    return afr
