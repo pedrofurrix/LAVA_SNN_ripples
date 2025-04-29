@@ -6,7 +6,8 @@ sys.path.insert(0, liset_path)
 
 from liset_aux import ripples_std, middle
 from signal_aid import most_active_channel, bandpass_filter
-from different_methods_conversion import *
+
+from utils_encoding import *
 import matplotlib.pyplot as plt
 from liset_tk import liset_tk
 import os
@@ -32,10 +33,10 @@ bandpass=[100,250]
 min_threshold=0.1 # minimum threshold for the spike detection
 save=True
 chunk_size=10000000
-
+threshold=None
 def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
                  time_max=time_max,window_size=window_size,sample_ratio=sample_ratio,scaling_factor=scaling_factor,
-                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,chunk_size=chunk_size):
+                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,chunk_size=chunk_size,threshold=threshold):
    
     # Define saving directory
     print('Extracting UP/Down Spikes ...')
@@ -48,17 +49,19 @@ def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
 
         # Load data from Liset and initialize threshold
         liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
-        threshold=np.zeros(liset.data.shape[1])
+       
         ripples=np.array(liset.ripples_GT)
         print("Ripples - shape:",ripples.shape)
         spikified_chunks=[]
         filtered_chunks=[]
         # Calculate the threshold for each channel
-        for channel in range(liset.data.shape[1]):
-            channel_signal = liset.data[:time_max*downsampled_fs, channel]
-            filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-            threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
-        print("Thresholds:",threshold)
+        if threshold is None:
+            threshold=np.zeros(liset.data.shape[1])
+            for channel in range(liset.data.shape[1]):
+                channel_signal = liset.data[:time_max*downsampled_fs, channel]
+                filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+                threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
+            print("Thresholds:",threshold)
 
         # Initialize looping variables
         start = 0
@@ -252,7 +255,7 @@ def overlaps_with_any_ripple(candidate_start, candidate_end, ripples_GT):
 
 def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
                  time_max=time_max,window_size=window_size,sample_ratio=sample_ratio,scaling_factor=scaling_factor,
-                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,chunk_size=chunk_size):
+                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,threshold=threshold):
     
     # Define saving directory
     print('Extracting UP/Down Spikes ...')
@@ -265,18 +268,19 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
     
         # Load data from Liset and initialize threshold
         liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
-        threshold=np.zeros(liset.data.shape[1])
         ripples=np.array(liset.ripples_GT)
         print("Ripples - shape:",ripples.shape)        
         spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
         filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
 
-        # Calculate the threshold for each channel
-        for channel in range(liset.data.shape[1]):
-            channel_signal = liset.data[:time_max*downsampled_fs, channel]
-            filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-            threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
-        print("Thresholds:",threshold)
+        # Calculate the threshold for each channel if not given
+        if threshold is None:
+            threshold=np.zeros(liset.data.shape[1])
+            for channel in range(liset.data.shape[1]):
+                channel_signal = liset.data[:time_max*downsampled_fs, channel]
+                filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+                threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
+            print("Thresholds:",threshold)
 
         sub_save_dir=os.path.join(save_dir, f"{i}",f"{downsampled_fs}")
 
@@ -502,7 +506,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                 "SNR": calculate_snr(s_full, r_full),
                 "RMSE": calculate_rmse(s_full, r_full),
                 "R_squared": calculate_r_squared(s_full, r_full),
-                "AFR": calculate_average_spike_rate(spikes_full)
+                "AFR": calculate_average_spike_rate(spikes_full,downsampled_fs)
             }
 
             # Calculate metrics for ripples
@@ -518,7 +522,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                 snrs.append(calculate_snr(s, r))
                 rmses.append(calculate_rmse(s, r))
                 r2s.append(calculate_r_squared(s, r))
-                afrs.append(calculate_average_spike_rate(spikes))
+                afrs.append(calculate_average_spike_rate(spikes,downsampled_fs))
 
             # Store averaged ripple metrics
             if snrs:  # in case ripples is empty
@@ -561,54 +565,6 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
 
 
 
-def calculate_snr(original, reconstructed):
-    """
-    Calculate the Signal-to-Noise Ratio (SNR) between the original and reconstructed signals.
-    The SNR is calculated as the ratio of the power of the original signal to the power of the noise (difference between original and reconstructed signals).
-    """
-    # Ensure inputs are numpy arrays
-    s = np.asarray(original)
-    r = np.asarray(reconstructed)
-
-    # Compute the power of the original signal
-    power_signal = np.mean(s ** 2)
-
-    # Compute the power of the noise (difference)
-    power_noise = np.mean((s - r) ** 2)
-
-    # Avoid division by zero
-    if power_noise == 0:
-        return float('inf')  # Perfect reconstruction
-
-    # Compute SNR in dB
-    snr_db = 20 * np.log10(power_signal / power_noise)
-    return snr_db
-
-
-def calculate_rmse(original, reconstructed):
-    error=np.sqrt(np.mean((reconstructed-original) ** 2))
-    return error
-
-def calculate_r_squared(original, reconstructed):  
-    s = np.asarray(original)
-    r = np.asarray(reconstructed)
-
-    ss_res = np.sum((s - r) ** 2)
-    ss_tot = np.sum((s - np.mean(s)) ** 2)
-
-    if ss_tot == 0:
-        return 1.0 if ss_res == 0 else -np.inf  # Edge case: constant signal
-
-    r_squared = 1 - (ss_res / ss_tot)
-    return r_squared
-
-def calculate_average_spike_rate(spike_train,downsampled_fs=downsampled_fs):  
-    sp = np.asarray(spike_train)
-    afr = np.sum(np.abs(sp)) / len(sp)
-    # Convert to Hz
-    afr = afr * downsampled_fs
-
-    return afr
 
 
 def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=[0],ripple=7,id=0):
@@ -719,3 +675,55 @@ def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,bandpass=
 
     fig.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5, 1.02))
     plt.show()
+
+def plot_ripple_stats(parent=parent,downsampled_fs=downsampled_fs):
+    """
+    Plot the ripple statistics
+
+    """
+    # Load the ripples from the parent directory
+    ripples_list = []  # Initialize an empty list to store the arrays
+    time=[]
+    ripple_num=[]
+
+    for i in os.listdir(parent):
+        dataset_path=os.path.join(parent,i)
+        # ripples_list.append(load_ripple_times(dataset_path))  # Append arrays to the list
+        liset=liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+
+        ripples = np.array(liset.ripples_GT)
+
+        if ripples.size == 0:
+            print(f"No ripples found in {i}")
+            continue
+        ripples_list.append(ripples)        
+
+        # Duration is the stop - start
+        durations = (ripples[:, 1] - ripples[:, 0])/downsampled_fs*1000 # Convert to milliseconds
+        # Calculate the mean and standard deviation of the durations
+        mean_duration = np.mean(durations)
+        std_duration = np.std(durations)
+        num_ripples=ripples.shape[0]
+        time.append(liset.data.shape[0]/downsampled_fs)
+        ripple_num.append(num_ripples)
+        rate=num_ripples/(liset.data.shape[0]/downsampled_fs) #ripples/s
+        print(f"Dataset: {i}, Mean Duration: {mean_duration:.2f} ms, Std Duration: {std_duration:.2f} ms, Rate: {rate:.2f} ripples/s")
+    # Concatenate all ripples across datasets
+    if len(ripples_list) > 0:
+        all_ripples = np.concatenate(ripples_list, axis=0)
+        durations = (all_ripples[:, 1] - all_ripples[:, 0]) / downsampled_fs * 1000
+
+        mean_duration = np.mean(durations)
+        std_duration = np.std(durations)
+        mean_rate=sum(ripple_num)/sum(time) # ripples/s
+        print(f"\nOverall Mean Duration: {mean_duration:.2f} ms, Std: {std_duration:.2f} ms, Rate: {mean_rate:.2f} ripples/s")
+
+        plt.hist(durations, bins=50, alpha=0.7)
+        plt.xlabel('Duration (ms)')
+        plt.ylabel('Frequency')
+        plt.title('Histogram of Ripple Durations (All Datasets)')
+        plt.show()
+    else:
+        print("No ripple data found.")
+    
+
