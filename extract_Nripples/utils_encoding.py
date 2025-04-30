@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import sys
-
+import matplotlib.pyplot as plt
 
 liset_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../liset_tk'))
 sys.path.insert(0, liset_path)
@@ -34,7 +34,7 @@ def ripple_stats(parent_path):
     
 
 # Based on https://github.com/kburel/snn-hfo-detection/blob/main/snn_hfo_detection/functions/signal_to_spike/utility.py#L43
-def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_factor):
+def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_factor,plot=False):
     times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
 
     min_time = np.min(times)
@@ -75,7 +75,71 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
     threshold_up = np.mean(np.sort(max_min_amplitude[:, 0])[:chosen_samples])
     threshold_dn = np.mean(
         np.sort(max_min_amplitude[:, 1] * -1)[:chosen_samples])
+    if plot:
+        plot_threshold_hist(max_min_amplitude[:,0],max_min_amplitude[:,1],threshold_up*scaling_factor,bins=20)
     return scaling_factor*(threshold_up + threshold_dn)
+
+def threshold_percentile(signal,downsampled_fs,window_size,scaling_factor,percentile,plot=False):
+    times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
+
+    min_time = np.min(times)
+    if np.min(times) < 0:
+        raise ValueError(
+            f'Tried to find thresholds for a dataset with a negative time: {min_time}')
+    duration = np.max(times) - min_time
+    if duration <= 0:
+        raise ValueError(
+            f'Tried to find thresholds for a dataset with a duration that under or equal to zero. Got duration: {duration}')
+
+    if len(signal) == 0:
+        raise ValueError('signals is not allowed to be empty, but was'
+                         )
+    if len(times) == 0:
+        raise ValueError('times is not allowed to be empty, but was')
+
+    if len(signal) != len(times):
+        raise ValueError(
+            f'signals and times need to have corresponding indices, but signals has length {len(signal)} while times has length {len(times)}')
+
+    num_timesteps = int(np.ceil(duration / window_size))
+    max_amplitudes = np.zeros((num_timesteps))
+    min_amplitudes = np.zeros((num_timesteps))
+
+    for interval_nr, interval_start in enumerate(np.arange(start=0, stop=duration, step=window_size)):
+        interval_end = interval_start + window_size
+        index = np.where((times >= interval_start) & (times <= interval_end))
+        max_amplitude = np.max(signal[index])
+        min_amplitude = np.min(signal[index])
+        max_amplitudes[interval_nr] = max_amplitude
+        min_amplitudes[interval_nr] = min_amplitude
+
+    threshold_percentile = np.percentile(max_amplitudes, percentile)
+    threshold=threshold_percentile*scaling_factor
+    if plot:
+        plot_threshold_hist(max_amplitudes,min_amplitudes,threshold,bins=20)
+    return threshold
+
+def plot_threshold_hist(max_amplitudes,min_amplitudes,threshold,bins=20):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))  # 1 row, 2 columns
+
+    # Plot max amplitudes
+    axs[0].hist(max_amplitudes, bins=bins, alpha=0.7, color='blue', label='Max Amplitudes')
+    axs[0].axvline(threshold, color='r', linestyle='dashed', linewidth=1, label='Threshold')
+    axs[0].set_title('Histogram of Max Amplitudes')
+    axs[0].set_xlabel('Amplitude')
+    axs[0].set_ylabel('Count')
+    axs[0].legend()
+
+    # Plot min amplitudes
+    axs[1].hist(min_amplitudes, bins=bins, alpha=0.7, color='green', label='Min Amplitudes')
+    # axs[1].axvline(threshold, color='r', linestyle='dashed', linewidth=1, label='Threshold')
+    axs[1].set_title('Histogram of Min Amplitudes')
+    axs[1].set_xlabel('Amplitude')
+    axs[1].set_ylabel('Count')
+    axs[1].legend()
+
+    plt.tight_layout()
+    plt.show()
 
 def up_down_channel(signal,threshold,downsampled_fs,refractory=0):
     # Define parameters
@@ -158,40 +222,3 @@ def calculate_average_spike_rate(spike_train,downsampled_fs=0):
     return afr
 
 
-def threshold_percentile(signal,downsampled_fs,window_size,scaling_factor,percentile):
-    times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
-
-    min_time = np.min(times)
-    if np.min(times) < 0:
-        raise ValueError(
-            f'Tried to find thresholds for a dataset with a negative time: {min_time}')
-    duration = np.max(times) - min_time
-    if duration <= 0:
-        raise ValueError(
-            f'Tried to find thresholds for a dataset with a duration that under or equal to zero. Got duration: {duration}')
-
-    if len(signal) == 0:
-        raise ValueError('signals is not allowed to be empty, but was'
-                         )
-    if len(times) == 0:
-        raise ValueError('times is not allowed to be empty, but was')
-
-    if len(signal) != len(times):
-        raise ValueError(
-            f'signals and times need to have corresponding indices, but signals has length {len(signal)} while times has length {len(times)}')
-
-    num_timesteps = int(np.ceil(duration / window_size))
-    max_amplitudes = np.zeros((num_timesteps))
-    min_amplitudes = np.zeros((num_timesteps))
-
-    for interval_nr, interval_start in enumerate(np.arange(start=0, stop=duration, step=window_size)):
-        interval_end = interval_start + window_size
-        index = np.where((times >= interval_start) & (times <= interval_end))
-        max_amplitude = np.max(signal[index])
-        min_amplitude = np.min(signal[index])
-        max_amplitudes[interval_nr] = max_amplitude
-        min_amplitudes[interval_nr] = min_amplitude
-
-    threshold_percentile = np.percentile(max_amplitudes, percentile)
-    threshold=threshold_percentile*scaling_factor
-    return threshold

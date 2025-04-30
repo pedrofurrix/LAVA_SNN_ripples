@@ -18,10 +18,10 @@ import json
 from matplotlib.lines import Line2D
 
 #### LAB PC
-# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 
 ### HOME PC
-parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+# parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
 time_max=10 # seconds
@@ -442,6 +442,18 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
 
     """
     metrics={}
+    total_up_all = 0
+    total_down_all = 0
+    global_metrics_sum = {
+        "SNR": [],
+        "RMSE": [],
+        "R_squared": [],
+        "AFR": [],
+        "SNR_ripples": [],
+        "RMSE_ripples": [],
+        "R_squared_ripples": [],
+        "AFR_ripples": []
+    }
     ############## Load the data ##################
     datasets=os.listdir(parent)
     
@@ -539,6 +551,12 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                     "R_squared": None,
                     "AFR": None
                 }
+        total_up_spikes = int(np.sum(up_down[:, :, 0]))
+        total_down_spikes = int(np.sum(up_down[:, :, 1]))
+        metrics[dataset]["total_up_spikes"] = total_up_spikes
+        metrics[dataset]["total_down_spikes"] = total_down_spikes
+        metrics[dataset]["total_spikes"] = total_up_spikes + total_down_spikes
+        
         metrics[dataset]["average_channels"]={
             "SNR": float(np.mean([metrics[dataset][channel]["general"]["SNR"] for channel in channels])),
             "RMSE": float(np.mean([metrics[dataset][channel]["general"]["RMSE"] for channel in channels])),
@@ -551,6 +569,45 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             "R_squared": float(np.mean([metrics[dataset][channel]["ripples"]["R_squared"] for channel in channels])),
             "AFR": float(np.mean([metrics[dataset][channel]["ripples"]["AFR"] for channel in channels]))
         }
+
+        # Accumulate UP/DOWN spike counts
+        total_up_all += total_up_spikes
+        total_down_all += total_down_spikes
+        
+        # Accumulate channel-level averages
+        global_metrics_sum["SNR"].append(metrics[dataset]["average_channels"]["SNR"])
+        global_metrics_sum["RMSE"].append(metrics[dataset]["average_channels"]["RMSE"])
+        global_metrics_sum["R_squared"].append(metrics[dataset]["average_channels"]["R_squared"])
+        global_metrics_sum["AFR"].append(metrics[dataset]["average_channels"]["AFR"])
+
+        # Accumulate ripple-level averages
+        global_metrics_sum["SNR_ripples"].append(metrics[dataset]["average_ripples"]["SNR"])
+        global_metrics_sum["RMSE_ripples"].append(metrics[dataset]["average_ripples"]["RMSE"])
+        global_metrics_sum["R_squared_ripples"].append(metrics[dataset]["average_ripples"]["R_squared"])
+        global_metrics_sum["AFR_ripples"].append(metrics[dataset]["average_ripples"]["AFR"])
+
+    overall_total_spikes = total_up_all + total_down_all
+
+    overall_metrics = {
+        "total_spikes": overall_total_spikes,
+        "total_up_spikes": total_up_all,
+        "total_down_spikes": total_down_all,
+        "average_channels": {
+            "SNR": float(np.mean(global_metrics_sum["SNR"])),
+            "RMSE": float(np.mean(global_metrics_sum["RMSE"])),
+            "R_squared": float(np.mean(global_metrics_sum["R_squared"])),
+            "AFR": float(np.mean(global_metrics_sum["AFR"]))
+        },
+        "average_ripples": {
+            "SNR": float(np.mean(global_metrics_sum["SNR_ripples"])),
+            "RMSE": float(np.mean(global_metrics_sum["RMSE_ripples"])),
+            "R_squared": float(np.mean(global_metrics_sum["R_squared_ripples"])),
+            "AFR": float(np.mean(global_metrics_sum["AFR_ripples"]))
+        }
+    }
+        
+    metrics["overall_metrics"] = overall_metrics
+
     # Save the metrics
     if save:
         os.makedirs(save_dir, exist_ok=True)
