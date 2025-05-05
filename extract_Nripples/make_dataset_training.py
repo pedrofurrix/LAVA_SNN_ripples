@@ -15,62 +15,79 @@ import time
 
 # Define general variables
 parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+
+### HOME PC
+# parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+
 std, mean = ripples_std(parent) # 61 ms
 processed_ripples = []
-downsampled_fs= 4000
+downsampled_fs= 1000
 
 up_down_path= os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
 bandpass=[100,250]
 threshold=0.1
+save=True
 
-def concat_dataset( downsampled_fs=downsampled_fs,parent=parent,up_down_path=up_down_path,bandpass=bandpass,threshold=threshold):
-    """
-    
+def concat_dataset(downsampled_fs=downsampled_fs,parent=parent,up_down_path=up_down_path,bandpass=bandpass,threshold=threshold,save=save):
+   
+    """    
     Concatenate all the channels into a single array [Timesteps x Num_channels, 2], to extract the windows
     Remove the channels with the baseline below the threshold value
     Save ground truth
-
     """
 
     save_dir = os.path.join(up_down_path,str(downsampled_fs))
     os.makedirs(save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
-
-    start=0
-    labels=[]
+    concatenated_data=[]
+    ripple_position=0
+    ripples_concat=[]
+    total_length = 0
 
     for i in os.listdir(parent):
-        with open(os.path.join(up_down_path,i,str(downsampled_fs), f'params_{bandpass[0]}_{bandpass[1]}.json'), 'r') as f:
+        path_dataset=os.path.join(up_down_path,str(i),str(downsampled_fs))
+        print(path_dataset)
+        with open(os.path.join(path_dataset, f'params_{bandpass[0]}_{bandpass[1]}.json'), 'r') as f:
             parameters=json.load(f)
             thresholds=parameters["threshold"]
-        print (thresholds)    
+        print(thresholds)    
         dataset_path = os.path.join(parent, i)
-        up_down_path=os.path.join(up_down_path,i,str(downsampled_fs),f"data_up_down_{bandpass[0]}_{bandpass[1]}.npy")
-        liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=start, verbose=False) # Get the Ripple times (there were other ways, but this one is okay...)
-        up_down=np.load(up_down_path)
+        up_down_file=os.path.join(path_dataset,f"data_up_down_{bandpass[0]}_{bandpass[1]}.npy")
+        ripples_file=os.path.join(path_dataset,f"ripples.npy")
+        ripples=np.load(ripples_file)
+        up_down=np.load(up_down_file)
+        ripples.sort(axis=0)
+        valid_channels = [ch for ch in range(up_down.shape[1]) if thresholds[ch] >= threshold]
+        # Keep track of the ripples in the valid channels (create an array with the concatenated ripples)
+        
+        print(f"  → {len(valid_channels)} channels kept (out of {up_down.shape[1]})")
 
-        if hasattr(liset, 'data'):
-                # Update the reading start for the next loop
-                # Loop throough the ripples found in liset class (the ones in the range of the selected samples)
-                channels=[]
-                for channel in range(liset.data.shape(1)):
-                    if thresholds[channel] != threshold:
-                        channels.append(channel)
+        if valid_channels:
+            filtered = up_down[:, valid_channels, :]         # shape: [T, valid_C, 2]
+            reshaped = filtered.reshape(-1, 2)               # shape: [T * valid_C, 2]
+            concatenated_data.append(reshaped)
+        
+        # Adjust ripple indices to account for both dataset length and channel offset
+        adjusted_ripples = [
+            ripple + total_length + (channel_idx * up_down.shape[0])
+            for channel_idx in range(len(valid_channels))
+            for ripple in ripples
+        ]
+        ripples_concat.extend(adjusted_ripples)
+        total_length += up_down.shape[0] * len(valid_channels)   
+    concatenated_data = np.concatenate(concatenated_data, axis=0)  # shape: [T * valid_C, 2]   
+    ripples_both=np.array(ripples_concat)  # shape: [N, 2]
+    print(f"Total concatenated ripples: {len(ripples_both)}") 
+    print(f"Total concatenated data: {len(concatenated_data)}")
+    print(f"Ripples shape:", ripples_both.shape)
+    print("Data Shape:", concatenated_data.shape)
+    if save:
+        np.save(os.path.join(save_dir, f"concat_both.npy"), concatenated_data)
+        np.save(os.path.join(save_dir, f"ripples_both.npy"), ripples_both)
 
-                # Remove channels with a baseline below the threshold:
-                print("Channels to consider:",channels)
-                up_down_data=up_down[:,channels,:]
-                
+    return concatenated_data,ripples_both
 
-                          
-                     
-                for ripple in liset.ripples_GT:
+concatenated_data,ripples_both=concat_dataset()
 
-                    middle_idx = middle(ripple)
-                    ripple_signal = liset.data[middle_idx - half_S : middle_idx + half_S, :]
-                    for idx in range(ripple_signal.shape[1]):
-                        ripple_signal[:, idx] = bandpass_filter(ripple_signal[:, idx], bandpass=bandpass, fs=liset.fs)
-                    best_filtered_channel = most_active_channel(ripple_signal)
-                    processed_ripples.append(best_filtered_channel)
-        else:
-            print(f"Dataset {i} has no data")
-            return
+print("Concatenated data shape:", concatenated_data.shape)
+print("Ripples shape:", ripples_both.shape)
+print("Ripples:", ripples_both[:100])

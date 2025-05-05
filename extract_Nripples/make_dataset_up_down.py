@@ -275,12 +275,14 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
 
         # Calculate the threshold for each channel if not given
         if threshold is None:
-            threshold=np.zeros(liset.data.shape[1])
+            thresholds=np.zeros(liset.data.shape[1])
             for channel in range(liset.data.shape[1]):
                 channel_signal = liset.data[:time_max*downsampled_fs, channel]
                 filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-                threshold[channel]=max(min_threshold,calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor))
-            print("Thresholds:",threshold)
+                thresholds[channel]=max(min_threshold,round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
+            print("Thresholds:",thresholds)
+        else:
+            thresholds=np.ones(liset.data.shape[1])*threshold
 
         sub_save_dir=os.path.join(save_dir, f"{i}",f"{downsampled_fs}")
 
@@ -293,7 +295,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
                 channel_signal = liset.data[:, channel]
                 filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
                 filtered[:,channel]=filtered_signal
-                spikified[:, channel, :]=up_down_channel(filtered_signal,threshold[channel],liset.fs,refractory)
+                spikified[:, channel, :]=up_down_channel(filtered_signal,thresholds[channel],liset.fs,refractory)
         else:
             print("There is no data :(")
             return
@@ -303,7 +305,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
             os.makedirs(sub_save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
             save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
             np.save(save_data, arr=spikified, allow_pickle=True)
-            save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,threshold,downsampled_fs,chunk_size)
+            save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,thresholds,downsampled_fs,chunk_size)
             print(f'Saved UP-DOWN DataSet - {i}')
             # Save ripples
             ripples_path=os.path.join(sub_save_dir, f'ripples.npy')
