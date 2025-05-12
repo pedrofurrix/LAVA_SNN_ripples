@@ -904,4 +904,4 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     return fig,axes
 
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save, channels=[5],window=[0000,10000],id=0)
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save, channels=[0,1,2,5],window=[0000,10000],id=0)

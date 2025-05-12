@@ -395,6 +395,8 @@ class mse_temporal_loss_penalty():
     The first spike time of each output neuron [batch_size x num_outputs] is
     measured against the desired spike time with the Mean Square Error Loss
     Function.
+
+
     Note that the derivative of each spike time with respect to the spike
     df/dU is non-differentiable for most neuron classes, and is set to a sign
     estimator of -1.
@@ -578,6 +580,7 @@ def first_spike_acc(output, target, tolerance=0, verbose=False):
     targets_near_end_mask = (
         ((num_steps - 1 - tolerance) < target) & (target < num_steps) 
     )
+
     # define mask for output neurons that did not spike (equal to -1)
     spk_time_no_spike_mask = (output_first_spike_time == -1)
     # Define mask combining the two masks
@@ -586,6 +589,7 @@ def first_spike_acc(output, target, tolerance=0, verbose=False):
         print(f"Targets Near End Mask: {targets_near_end_mask}")
         print(f"Spk Time No Spike Mask: {spk_time_no_spike_mask}")
         print(f"Invalid Mask: {invalid_mask}")
+    
     '''
     If GT is near the end and the neuron did not spike, the prediction should not be considered into the
     accuracy calculation, since the window after the GT is < tolerance window Set the GT to -1 as well in those cases

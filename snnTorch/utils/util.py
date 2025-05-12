@@ -18,13 +18,13 @@ RIPPLE_CONFIDENCE_WINDOW = int(round(RIPPLE_DETECTION_OFFSET[1] * 1.8))
 # FR_CONFIDENCE_WINDOW = int(round(FR_DETECTION_OFFSET[1] * 2.2))
 # BOTH_CONFIDENCE_WINDOW = int(round(BOTH_DETECTION_OFFSET[1] * 2.2))
 
-def window_plot(window_signal,window_spikes,gt):
+def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000):
     import matplotlib.pyplot as plt
     import numpy as np
     from copy import deepcopy
     print(len(window_signal))
     # Create a time vector for the x-axis
-    time_vector = np.linspace(0,len(window_signal),len(window_signal))/1000 # Assuming a sampling rate of 1000 Hz
+    time_vector = np.linspace(0,len(window_signal),len(window_signal))/downsampled_fs # Assuming a sampling rate of 1000 Hz
 
     # Create a figure and axis
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -43,7 +43,7 @@ def window_plot(window_signal,window_spikes,gt):
 
     # Plot the ground truth (gt)
     if gt>=0:
-        gt_time=np.array(gt)/1000  # Convert to seconds
+        gt_time=np.array(gt)/downsampled_fs  # Convert to seconds
         ax.vlines(gt_time,trough*1.2,peak*1.2, color='green',linestyle="--", label='Ground Truth',alpha=0.5)
 
     # Add labels and title
