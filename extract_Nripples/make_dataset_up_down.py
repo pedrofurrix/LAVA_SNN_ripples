@@ -833,7 +833,7 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
        
         # Reconstruct the signal
         reconstructed_signal=np.zeros((up_down.shape[0],len(channels)))
-        
+        print("R")
         for i,channel in enumerate(channels):
             # reconstructed_signal[0,i]=filtered_liset[0,i]
             reconstructed_signal[0, i] = 0
@@ -904,4 +904,4 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     return fig,axes
 
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save, channels=[0,1,2,5],window=[0000,10000],id=0)
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=10000,parent=parent,save=save, channels=[1,],window=[20000,50000],id=0)
