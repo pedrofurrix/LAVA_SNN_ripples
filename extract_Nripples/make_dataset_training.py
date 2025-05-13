@@ -14,10 +14,10 @@ from copy import deepcopy
 import time
 
 # Define general variables
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 
 ### HOME PC
-# parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
 
 std, mean = ripples_std(parent) # 61 ms
 processed_ripples = []
@@ -86,8 +86,3 @@ def concat_dataset(downsampled_fs=downsampled_fs,parent=parent,up_down_path=up_d
 
     return concatenated_data,ripples_both
 
-concatenated_data,ripples_both=concat_dataset()
-
-print("Concatenated data shape:", concatenated_data.shape)
-print("Ripples shape:", ripples_both.shape)
-print("Ripples:", ripples_both[:100])

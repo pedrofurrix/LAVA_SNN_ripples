@@ -18,10 +18,11 @@ import json
 from matplotlib.lines import Line2D
 
 #### LAB PC
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
 
 ### HOME PC
-# parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
 time_max=10 # seconds
@@ -904,4 +905,4 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     return fig,axes
 
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=10000,parent=parent,save=save, channels=[1,],window=[20000,50000],id=0)
+# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=10000,parent=parent,save=save, channels=[1,],window=[20000,50000],id=0)
