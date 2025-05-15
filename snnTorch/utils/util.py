@@ -18,7 +18,7 @@ RIPPLE_CONFIDENCE_WINDOW = int(round(RIPPLE_DETECTION_OFFSET[1] * 1.8))
 # FR_CONFIDENCE_WINDOW = int(round(FR_DETECTION_OFFSET[1] * 2.2))
 # BOTH_CONFIDENCE_WINDOW = int(round(BOTH_DETECTION_OFFSET[1] * 2.2))
 
-def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000):
+def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000,detection_window=RIPPLE_DETECTION_OFFSET):
     import matplotlib.pyplot as plt
     import numpy as np
     from copy import deepcopy
@@ -45,6 +45,7 @@ def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000):
     if gt>=0:
         gt_time=np.array(gt)/downsampled_fs  # Convert to seconds
         ax.vlines(gt_time,trough*1.2,peak*1.2, color='green',linestyle="--", label='Ground Truth',alpha=0.5)
+        ax.fill_between([gt_time-(detection_window[2]/downsampled_fs), gt_time+(detection_window[2]/downsampled_fs)],trough*1.2, peak*1.2, color='green', alpha=0.1)
 
     # Add labels and title
     ax.set_xlabel('Time (s)')

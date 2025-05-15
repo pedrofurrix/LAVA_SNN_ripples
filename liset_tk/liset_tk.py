@@ -371,18 +371,19 @@ class liset_tk():
             data = downsample_data(data, self.original_fs, self.downsampled_fs)
             if self.verbose:
                 print("Done!")
-
-            if normalize:
-                # Normalize it with z-score
-                if self.verbose:
-                    print("Normalizing data...", end=" ")
-                data = z_score_normalization(data)
-                if self.verbose:
-                    print("Done!")
-                    print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
         else:
             self.fs = self.original_fs
 
+
+        if normalize:
+            # Normalize it with z-score
+            if self.verbose:
+                print("Normalizing data...", end=" ")
+            data = z_score_normalization(data)
+            if self.verbose:
+                print("Done!")
+                print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
+     
         return data
 
 
