@@ -222,3 +222,41 @@ def calculate_average_spike_rate(spike_train,downsampled_fs=0):
     return afr
 
 
+def extract_spikes_downsample(spike_train,original_freq,target_freq):
+    """
+    Downsamples a binary (UP/DOWN) spike train from original_freq to target_freq
+    keeping at most 1 spike per ms. Chooses the direction with more spikes in each window.
+    
+    Parameters:
+        spike_train (np.ndarray): Shape (n_samples, 2), binary values for UP and DOWN
+        original_freq (int): Original sampling rate (default: 30000 Hz)
+        target_freq (int): Target sampling rate (default: 1000 Hz)
+    
+    Returns:
+        np.ndarray: Downsampled spike train (shape: n_bins, 2)
+    """
+
+    factor = original_freq // target_freq
+    n_samples = spike_train.shape[0]
+    n_bins = n_samples // factor
+    
+    # Trim excess samples if needed
+    trimmed = spike_train[:n_bins * factor]
+    
+    # Reshape to (n_bins, factor, 2)
+    # Each row corresponds to 1 ms window with 30 time points of 2D spikes (UP/DOWN)
+    reshaped = trimmed.reshape(n_bins, factor, 2)
+    
+    # Sum UP and DOWN spikes within each bin
+    up_sum = reshaped[:, :, 0].sum(axis=1)
+    down_sum = reshaped[:, :, 1].sum(axis=1)
+    
+    # Allocate result array
+    result = np.zeros((n_bins, 2), dtype=int)
+    
+    # Assign dominant spike direction
+    result[up_sum > down_sum, 0] = 1  # UP spike
+    result[down_sum > up_sum, 1] = 1  # DOWN spike
+    # If equal or both zero → remains [0, 0]
+    
+    return result

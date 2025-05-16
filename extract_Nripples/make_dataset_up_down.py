@@ -274,7 +274,6 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
         print("Frequency:",liset.fs)          
         spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
         filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
-
         # Calculate the threshold for each channel if not given
         if threshold is None:
             thresholds=np.zeros(liset.data.shape[1])
@@ -910,5 +909,30 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     plt.show()
     return fig,axes
 
+def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent=parent,bandpass=bandpass,save_dir=save_dir):
+    datasets=os.listdir(parent)
+    for dataset in datasets:
+        dataset_path=os.path.join(parent,dataset)
+        up_down_path=os.path.join(save_dir,dataset,f"{original_freq}")
+        print("Loaded LFPs:",dataset_path)
+
+        if spikified is None:
+            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+            up_down= np.load(path)
+            print("Loaded UP/DN SPikes:", path)
+        else:
+            up_down=spikified
+            print("Spikified Loaded")
+
+        factor=original_freq//target_freq
+        downsampled=np.zeros((int(up_down.shape[0]//factor),up_down.shape[1],up_down.shape[2]))
+        for channel in up_down.shape[1]:
+            downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],original_freq=original_freq,target_freq=target_freq)
+
+        # Save the downsampled data
+        os.makedirs(up_down_path, exist_ok=True)  # <-- creates directory if it doesn't exist
+        save_data=os.path.join(up_down_path, f'spikes_downsampled_{target_freq}Hz.npy')
+        np.save(save_data, arr=downsampled, allow_pickle=True)
+        print(f'Saved DOWNsampled UP-DOWN DataSet - {dataset}')
 
 # plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,],window=[0,300000],id=0,spikes=False) 
