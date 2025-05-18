@@ -28,6 +28,37 @@ def load_ripple_times(path):
         print(f'File {ripples_file_path} does not exist. \nEnsure to put the path where ripples.csv lives in.') 
         return None  
     
+def load_ripple_times_paper(path):
+    """
+    Loads ripple start and end times from a CSV file.
+
+    Parameters:
+    - path (str): Path to the folder containing 'ripples.csv'.
+
+    Returns:
+    - ripples (np.ndarray): Array of shape (n_ripples, 2), with [start, end] samples per ripple.
+    """
+    ripples_file_path = os.path.join(path, 'ripples.csv')
+
+    if os.path.exists(ripples_file_path):
+        # Try both separators
+        try:
+            df = pd.read_csv(ripples_file_path, sep=' ')
+            if df.columns[0].startswith('Unnamed'):
+                df = pd.read_csv(ripples_file_path, sep=',')
+        except Exception:
+            df = pd.read_csv(ripples_file_path, sep=',')
+
+        # Extract only ripIni and ripEnd
+        if {'ripIni', 'ripEnd'}.issubset(df.columns):
+            ripples = df[['ripIni', 'ripEnd']].to_numpy(dtype=int)
+            return ripples
+        else:
+            print("Error: Columns 'ripIni' and 'ripEnd' not found in CSV.")
+            return None
+    else:
+        print(f"File {ripples_file_path} does not exist.")
+        return None
     
 def RAW2ORDERED(data, channels, num_channels_raw = 43):
     """
@@ -44,7 +75,7 @@ def RAW2ORDERED(data, channels, num_channels_raw = 43):
     """
 
     num_channels = len(channels)
-    channel_len = int(data.shape[0]/43)
+    channel_len = int(data.shape[0]/num_channels_raw)
     ordered = np.zeros((channel_len, num_channels))
 
     for i, chan in enumerate(channels):

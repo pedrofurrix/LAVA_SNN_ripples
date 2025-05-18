@@ -222,7 +222,7 @@ def calculate_average_spike_rate(spike_train,downsampled_fs=0):
     return afr
 
 
-def extract_spikes_downsample(spike_train,original_freq,target_freq):
+def extract_spikes_downsample(spike_train,factor):
     """
     Downsamples a binary (UP/DOWN) spike train from original_freq to target_freq
     keeping at most 1 spike per ms. Chooses the direction with more spikes in each window.
@@ -236,7 +236,6 @@ def extract_spikes_downsample(spike_train,original_freq,target_freq):
         np.ndarray: Downsampled spike train (shape: n_bins, 2)
     """
 
-    factor = original_freq // target_freq
     n_samples = spike_train.shape[0]
     n_bins = n_samples // factor
     
@@ -260,3 +259,49 @@ def extract_spikes_downsample(spike_train,original_freq,target_freq):
     # If equal or both zero → remains [0, 0]
     
     return result
+
+
+def average_downsampling(signal,factor):
+    """
+    Downsamples a signal from original_freq to target_freq using averaging.
+    
+    Parameters:
+        signal (np.ndarray): Input signal to be downsampled
+        original_freq (int): Original sampling rate (default: 30000 Hz)
+        target_freq (int): Target sampling rate (default: 1000 Hz)
+    
+    Returns:
+        np.ndarray: Downsampled signal
+    """
+    
+    n_samples = len(signal)
+    n_bins = n_samples // factor
+    
+    # Trim excess samples if needed
+    trimmed = signal[:n_bins * factor]
+    
+    # Reshape to (n_bins, factor)
+    reshaped = trimmed.reshape(n_bins, factor)
+    
+    # Average within each bin
+    downsampled_signal = reshaped.mean(axis=1)
+    
+    return downsampled_signal
+
+def decimation_downsampling(signal,factor):
+    """
+    Downsamples a signal from original_freq to target_freq using decimation.
+    
+    Parameters:
+        signal (np.ndarray): Input signal to be downsampled
+        original_freq (int): Original sampling rate (default: 30000 Hz)
+        target_freq (int): Target sampling rate (default: 1000 Hz)
+    
+    Returns:
+        np.ndarray: Downsampled signal
+    """
+    trim_len = len(signal) - (len(signal) % factor)
+    signal = signal[:trim_len]
+    downsampled_signal = signal[::factor]
+    
+    return downsampled_signal
