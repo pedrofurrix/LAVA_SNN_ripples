@@ -50,22 +50,22 @@ def undersample_majority(input_data, gt, c1_mask = None) -> tuple[np.ndarray, np
     '''
 
     if c1_mask is None:
-        # Get the indices of the two classes
-        class_0_indices = np.where(gt == 0)[0]
-        class_1_indices = np.where(gt == 1)[0]
+        # Ripples: gt != -1, Non-ripples: gt == -1
+        non_ripple_indices = np.where(gt == -1)[0]
+        ripple_indices = np.where(gt != -1)[0]
     else:
-        class_0_indices = np.where(c1_mask == 0)[0]
-        class_1_indices = np.where(c1_mask == 1)[0]
+        non_ripple_indices = np.where(c1_mask == 0)[0]
+        ripple_indices = np.where(c1_mask == 1)[0]
 
     # Get the minimum commmon number of samples
-    num_samples = min(len(class_0_indices), len(class_1_indices))   # Number of samples to keep from each class
+    num_samples = min(len(non_ripple_indices), len(ripple_indices))   # Number of samples to keep from each class
 
     # Randomly sort the indices of the two classes
-    np.random.shuffle(class_0_indices)
-    np.random.shuffle(class_1_indices)
+    np.random.shuffle(non_ripple_indices)
+    np.random.shuffle(ripple_indices)
 
     # Get the balanced indices
-    balanced_indices = np.concatenate((class_0_indices[:num_samples], class_1_indices[:num_samples]))
+    balanced_indices = np.concatenate((non_ripple_indices[:num_samples],ripple_indices[:num_samples]))
 
     # Sort the indices
     balanced_indices = np.sort(balanced_indices)

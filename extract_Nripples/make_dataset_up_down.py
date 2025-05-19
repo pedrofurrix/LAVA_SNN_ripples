@@ -9,7 +9,9 @@ from signal_aid import most_active_channel, bandpass_filter
 
 from utils_encoding import *
 import matplotlib.pyplot as plt
-from liset_tk import liset_tk
+# from liset_tk import liset_tk
+from liset_paper import liset_paper as liset_tk
+
 import os
 import numpy as np
 from copy import deepcopy
@@ -19,9 +21,10 @@ from matplotlib.lines import Line2D
 
 #### LAB PC
 # parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
 
 ### HOME PC
-parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+# parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
 
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
@@ -49,7 +52,7 @@ def make_up_down(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
         dataset_path = os.path.join(parent, i)
 
         # Load data from Liset and initialize threshold
-        liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+        liset = liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
        
         ripples=np.array(liset.ripples_GT)
         print("Ripples - shape:",ripples.shape)
@@ -822,7 +825,7 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     datasets=[dirs[id]]
     for dataset in datasets:
         dataset_path=os.path.join(parent,dataset)
-        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
         up_down_path=os.path.join(save_dir,dataset,f"{liset.fs}")
         print("Loaded LFPs:",dataset_path)
         if channels is None:
@@ -902,8 +905,8 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
         
         peak=max(np.max(filtered[:,channel]),0.5)
         trough=min(np.min(filtered[:,channel]),-0.5)
+        mean=np.mean(filtered[:,channel])
         if spikes:
-            mean=np.mean(filtered[:,channel])
             ax.vlines(time[up_down_ripple[:,channel,0] == 1],mean,peak, alpha=0.5,
                     color='red', label='Positive Spikes' ,lw=0.5)
             ax.vlines(time[up_down_ripple[:,channel,1] == 1], trough,mean, alpha=0.5,
@@ -953,4 +956,4 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
         np.save(save_data, arr=downsampled, allow_pickle=True)
         print(f'Saved DOWNsampled UP-DOWN DataSet - {dataset}')
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,],window=[300000,1000000],id=0,spikes=False) 
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,],window=[300000,1000000],id=0,spikes=True) 

@@ -4,6 +4,7 @@ import numpy as np
 from liset_paper import liset_paper as liset_tk
 from signal_aid import most_active_channel, bandpass_filter
 from extract_Nripples.utils_encoding import *
+import random
 
 def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,sample_ratio, scaling_factor, 
                      refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor):
@@ -31,6 +32,7 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
         filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
         thresholds = []
         downsampled=np.zeros((liset.data.shape[0]//factor, liset.data.shape[1], 2))
+        print("Dataset: ", dataset)
         print("data shape: ", liset.data.shape)
         print("ripples shape: ", ripples.shape)
         # print("Head of data_concat: ", data[:10][:])
@@ -135,6 +137,8 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
                 total_hfos+=ripples.shape[0]
             else:
                 print(f"[WARNING] Channel {channel} has a very low threshold. Skipping...")
+        print("Thresholds: ", thresholds)
+        print("Dataset Processed: ", dataset)
         dataset_id+=liset.ripples_GT.shape[0]
     # Convert to numpy array
     ripple_ids=np.array(ripple_ids,dtype=np.int32)
@@ -189,6 +193,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
             filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
             thresholds.append(round(calculate_threshold(filtered_signal,liset.fs,window_size,sample_ratio,scaling_factor),4))
             config[dataset]["thresholds"][channel]=thresholds[channel]
+            
             if thresholds[channel] > 0.1:
                 channel_signal = liset.data[:, channel]
                 curr_ripple_id = 0     # Keep track of the current GT event index since it is monotonically increasing the timestep
@@ -222,7 +227,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                                 print(f"[WARNING] Window [{left}:{right}] has a GT event at {cur_gt_time} and NO Input activations. Skipping...")
                                 # Update the curr_gt_idx to the next GT event
                                 skipped_hfo_count += 1
-                            curr_ripple_id += 1
+                            # curr_ripple_id += 1
                         continue   
                     
                     '''
@@ -257,10 +262,11 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                             # Subtract the left offset to get the spike time in the current window
                             relative_spike_time = avg_spike_time - left
 
-                            relative_spike_time/=factor
+                            relative_spike_time//=factor
                             curr_gt = relative_spike_time   # Update the curr_gt value
 
                             curr_ripple=curr_ripple_id+dataset_id
+
                     # Append the current window    
                     ripple_ids.append(curr_ripple)
                     windowed_input_data.append(downsampled_window)            
@@ -278,12 +284,14 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     windowed_input_data = np.array(windowed_input_data)
     windowed_gt = np.array(windowed_gt, dtype=np.float32)
     removed_windows = total_windows_count - windowed_input_data.shape[0]
+
     print(f"Removed {removed_windows}/{total_windows_count} ({round((removed_windows / total_windows_count)*100, 2)}%) windows with no input activations")
     print(f"Skipped {skipped_hfo_count} HFOs due to no input activations")
     print(f"Total HFOs (theoretical): {total_hfos}")
     print("Windowed Input Data Shape: ", windowed_input_data.shape)
     print("Windowed GT Shape: ", windowed_gt.shape)
     print("Filtered Windows Shape: ", filtered_windows.shape)
+    
     return  windowed_input_data, windowed_gt, filtered_windows, ripple_ids, config
 
 
@@ -368,3 +376,56 @@ def only_some_channels_per_ripple(windows, gt, ripple_ids, top_channels):
         np.array(filtered_gt, dtype=np.float32),
         np.array(filtered_ripple_ids)
     )
+
+def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET, thresholds, max_prob=1.0):
+    """
+    Filters spike windows based on spike activity thresholds with a probability-based approach.
+
+    Args:
+        windows (np.ndarray): shape (N, T, 2)
+        gt (np.ndarray): shape (N,)
+        ripple_ids (list or np.ndarray): IDs for ripple tracking
+        MEAN_DETECTION_OFFSET (int): frames before GT spike to check for activity
+        thresholds (tuple): (non_hfo_threshold, hfo_activity_threshold)
+        max_prob (float): maximum probability of dropping a window (0.0 to 1.0)
+
+    Returns:
+        filtered_windows, filtered_gt, filtered_ripple_ids
+    """
+    cleaned_windows = []
+    cleaned_gt = []
+    cleaned_ripple_ids = []
+
+    def drop_prob(score, threshold, inverse=False):
+        """Probability increases the more 'wrong' the value is."""
+        diff = abs(score - threshold)
+        ratio = diff / threshold if threshold != 0 else 1
+        prob = min(ratio, 1.0) * max_prob
+        return 1.0 - prob if inverse else prob
+
+    for window, label, id in zip(windows, gt, ripple_ids):
+        total_spikes = np.sum(window)
+
+        if label == -1:  # Non-HFO (False Negatives)
+            if total_spikes>thresholds[0]:
+                prob = drop_prob(total_spikes, thresholds[0])
+                if random.random() < prob:
+                    print(f"False Negative Removed (Prob {prob:.2f}) - Spikes: {total_spikes}")
+                    continue
+
+        else:  # True or False Positive
+            spike_time = int(label)
+            pre_spikes = np.sum(window[spike_time - MEAN_DETECTION_OFFSET:])
+            if pre_spikes  < thresholds[1]:
+                prob = drop_prob(pre_spikes, thresholds[1], inverse=False)
+                if random.random() < prob:
+                    print(f"False Positive Removed (Prob {prob:.2f}) - Spikes: {pre_spikes}")
+                    continue
+
+        cleaned_windows.append(window)
+        cleaned_gt.append(label)
+        cleaned_ripple_ids.append(id)
+
+    removed = len(windows) - len(cleaned_windows)
+    print(f"Removed {removed} windows probabilistically!")
+    return np.array(cleaned_windows), np.array(cleaned_gt), np.array(cleaned_ripple_ids)
