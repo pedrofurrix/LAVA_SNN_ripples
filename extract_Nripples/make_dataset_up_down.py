@@ -21,10 +21,11 @@ from matplotlib.lines import Line2D
 
 #### LAB PC
 # parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
+# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
 
 ### HOME PC
 # parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
+parent=r"E:\neurospark_mat\Download_from_paper"
 
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
@@ -322,7 +323,7 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
     
     datasets=os.listdir(parent)
     dataset_path=os.path.join(parent,datasets[id])
-    liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+    liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
     up_down_path=os.path.join(save_dir,datasets[id],f"{liset.fs}")
     print("Loaded LFPs:",dataset_path)
     if filtered is None:
@@ -467,7 +468,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         metrics[dataset]={}
         dataset_path=os.path.join(parent,dataset)
         
-        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
         up_down_path=os.path.join(save_dir,dataset,f"{liset.fs}")
         print(f"Frequency: {liset.fs} Hz")
         print("Loaded LFPs:",dataset_path)
@@ -660,7 +661,7 @@ def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,bandpass=
     datasets=[dirs[id]]
     for dataset in datasets:
         dataset_path=os.path.join(parent,dataset)
-        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
+        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
         up_down_path=os.path.join(save_dir,dataset,f"{liset.fs}")
 
         print("Loaded LFPs:",dataset_path)
@@ -956,4 +957,4 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
         np.save(save_data, arr=downsampled, allow_pickle=True)
         print(f'Saved DOWNsampled UP-DOWN DataSet - {dataset}')
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,],window=[300000,1000000],id=0,spikes=True) 
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,2,3,4],window=[300000,1000000],id=0,spikes=True) 

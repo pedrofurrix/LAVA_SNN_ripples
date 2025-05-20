@@ -263,7 +263,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                             relative_spike_time = avg_spike_time - left
 
                             relative_spike_time//=factor
-                            curr_gt = relative_spike_time   # Update the curr_gt value
+                            curr_gt = int(relative_spike_time)   # Update the curr_gt value
 
                             curr_ripple=curr_ripple_id+dataset_id
 
@@ -294,42 +294,6 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     
     return  windowed_input_data, windowed_gt, filtered_windows, ripple_ids, config
 
-
-def min_max_spike_threshold(windows,gt,ripple_ids,MEAN_DETECTION_OFFSET,thresholds):
-    """
-    Filters spike windows based on spike activity thresholds.
-
-    Args:
-        windows (np.ndarray): shape (N, T, 2)
-        gt (np.ndarray): shape (N,)
-        MEAN_DETECTION_OFFSET (int): frames before GT spike to check for activity
-        thresholds (tuple): (non_hfo_threshold, hfo_activity_threshold)
-
-    Returns:
-        filtered_windows, filtered_gt
-    """
-    cleaned_windows=[]
-    cleaned_gt=[]
-    cleaned_ripple_ids=[]
-
-    for window, label,id in zip(windows, gt,ripple_ids):
-        if label == -1:
-            if np.sum(window) > thresholds[0]:
-                print("False Negative Removed - Number of Spikes: ", np.sum(window))
-                continue
-        else:
-            # Optional: you could add checks for valid spike positions
-            spike_time = int(label)
-            if np.sum(window[spike_time-MEAN_DETECTION_OFFSET:spike_time]) < thresholds[1]:
-                print("False Positive Removed - Number of Spikes: ", np.sum(window))
-                continue
-        
-        cleaned_windows.append(window)
-        cleaned_gt.append(label)
-        cleaned_ripple_ids.append(id)
-    removed=len(windows)-len(cleaned_windows)
-    print("Removed ", removed, " windows!")
-    return np.array(cleaned_windows), np.array(cleaned_gt),np.array(cleaned_ripple_ids)
 
 
 from collections import defaultdict
@@ -377,7 +341,61 @@ def only_some_channels_per_ripple(windows, gt, ripple_ids, top_channels):
         np.array(filtered_ripple_ids)
     )
 
-def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET, thresholds, max_prob=1.0):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def drop_linear(score, threshold, inverse=False, max_prob=1.0, multiplier=1.0,decay=3.0):
+    # Compute directional difference
+    diff = (threshold - score) if inverse else (score - threshold)
+    if diff <= 0:
+        return 0.0
+    prob = min((diff * multiplier) / threshold, 1.0) * max_prob
+    return prob
+
+def drop_quadratic(score, threshold, inverse=False, max_prob=1.0,decay=3.0,multiplier=1.0):
+    diff = (threshold - score) if inverse else (score - threshold)
+    if diff <= 0:
+        return 0.0
+    x = diff / threshold
+    prob = min(x**2, 1.0) * max_prob
+    return prob
+
+def drop_exponential(score, threshold, inverse=False, max_prob=1.0, multiplier=1, decay=3.0):
+    diff = (threshold - score) if inverse else (score - threshold)
+    if diff <= 0:
+        return 0.0
+    x = diff / threshold
+    prob = (1 - np.exp(-decay * x))
+    return min(prob, 1.0) * max_prob
+
+def drop_logistic(score, threshold, inverse=False, max_prob=1.0, multiplier=1,decay=10.0):
+    diff = (threshold - score) if inverse else (score - threshold)
+    # Normalize to [−∞, +∞]
+    rel = diff / threshold
+    # Apply logistic growth
+    prob = max_prob / (1 + np.exp(-decay * rel))
+    # Ensure zero when diff ≤ 0
+    return prob if diff > 0 else 0.0
+
+def drop_all(score, threshold, inverse=False, max_prob=1.0, multiplier=1,decay=10.0):
+    return max_prob
+
+
+def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET, thresholds, max_prob=1.0,multiplier=1,decay=3.0,drop_fn=drop_linear):
     """
     Filters spike windows based on spike activity thresholds with a probability-based approach.
 
@@ -395,31 +413,49 @@ def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET,
     cleaned_windows = []
     cleaned_gt = []
     cleaned_ripple_ids = []
-
+    false_pos = 0
+    false_neg = 0
     def drop_prob(score, threshold, inverse=False):
         """Probability increases the more 'wrong' the value is."""
-        diff = abs(score - threshold)
+        diff = abs(score - threshold)*multiplier
         ratio = diff / threshold if threshold != 0 else 1
         prob = min(ratio, 1.0) * max_prob
         return 1.0 - prob if inverse else prob
+    
+    def exp_drop_prob(score,threshold,inverse=False,steepness=5.0):
+        if threshold == 0:
+            return max_prob  # Avoid division by zero
+
+        # Compute relative difference from threshold
+        rel_diff = (score - threshold) / threshold
+
+        # Invert direction if needed (e.g., for HFOs with too few spikes)
+        if inverse:
+            rel_diff *= -1
+
+        # Compute logistic drop probability
+        prob = max_prob / (1 + np.exp(-steepness * rel_diff))
+        return prob
 
     for window, label, id in zip(windows, gt, ripple_ids):
         total_spikes = np.sum(window)
 
         if label == -1:  # Non-HFO (False Negatives)
             if total_spikes>thresholds[0]:
-                prob = drop_prob(total_spikes, thresholds[0])
+                prob = drop_fn(total_spikes,thresholds[0],inverse=False,max_prob=max_prob,multiplier=multiplier,decay=decay)
                 if random.random() < prob:
                     print(f"False Negative Removed (Prob {prob:.2f}) - Spikes: {total_spikes}")
+                    false_neg+=1
                     continue
 
         else:  # True or False Positive
             spike_time = int(label)
-            pre_spikes = np.sum(window[spike_time - MEAN_DETECTION_OFFSET:])
-            if pre_spikes  < thresholds[1]:
-                prob = drop_prob(pre_spikes, thresholds[1], inverse=False)
+            # pre_spikes = np.sum(window[spike_time - MEAN_DETECTION_OFFSET:])
+            if total_spikes  < thresholds[1]:
+                prob = drop_fn(total_spikes,thresholds[1],inverse=True,max_prob=max_prob,multiplier=multiplier,decay=decay)
                 if random.random() < prob:
-                    print(f"False Positive Removed (Prob {prob:.2f}) - Spikes: {pre_spikes}")
+                    print(f"False Positive Removed (Prob {prob:.2f}) - Spikes: {total_spikes}")
+                    false_pos+=1
                     continue
 
         cleaned_windows.append(window)
@@ -428,4 +464,9 @@ def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET,
 
     removed = len(windows) - len(cleaned_windows)
     print(f"Removed {removed} windows probabilistically!")
+    print("False Positives Removed: ", false_pos)
+    print("False Negatives Removed: ", false_neg)
     return np.array(cleaned_windows), np.array(cleaned_gt), np.array(cleaned_ripple_ids)
+
+
+
