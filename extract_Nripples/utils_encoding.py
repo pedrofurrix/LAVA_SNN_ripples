@@ -171,6 +171,37 @@ def up_down_channel(signal,threshold,downsampled_fs,refractory=0):
 
     return spikified
 
+def up_down_channel_SF(signal,threshold,downsampled_fs,refractory=0):
+    # Define parameters
+    # print("Threshold=",threshold)
+    num_timesteps = len(signal)
+    spikified = np.zeros((num_timesteps, 2 ))
+    value=signal[0]
+    refractory_samples = int(refractory*downsampled_fs)
+    
+    if refractory_samples == 0:
+        refractory_samples = 1
+
+    i = 0
+    # print("Max Signal:", max(signal),"\n Min Signal:",min(signal))
+    while i < num_timesteps:
+        delta = signal[i] - value
+        if delta >= threshold:
+            spikified[i,0] = 1
+            value +=threshold
+            i += refractory_samples  # skip refractory period
+            # print(delta)
+        elif delta <= -threshold:
+            spikified[i,1] = 1
+            value -=threshold
+            i += refractory_samples  # skip refractory period    
+            # print(delta)
+        else:
+            i += 1  # no spike, move to next time step
+
+    return spikified
+
+
 
 def calculate_snr(original, reconstructed):
     """

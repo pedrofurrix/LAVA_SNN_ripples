@@ -21,11 +21,11 @@ from matplotlib.lines import Line2D
 
 #### LAB PC
 # parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
-# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
 
 ### HOME PC
 # parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
-parent=r"E:\neurospark_mat\Download_from_paper"
+# parent=r"E:\neurospark_mat\Download_from_paper"
 
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
@@ -275,7 +275,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
         liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
         ripples=np.array(liset.ripples_GT)
         print("Ripples - shape:",ripples.shape)   
-        print("Frequency:",liset.fs)          
+        print("Frequency:",liset.fs, "Hz")          
         spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
         filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
         # Calculate the threshold for each channel if not given
@@ -300,7 +300,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
                 channel_signal = liset.data[:, channel]
                 filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
                 filtered[:,channel]=filtered_signal
-                spikified[:, channel, :]=up_down_channel(filtered_signal,thresholds[channel],liset.fs,refractory)
+                spikified[:, channel, :]=up_down_channel_SF(filtered_signal,thresholds[channel],liset.fs,refractory)
         else:
             print("There is no data :(")
             return
@@ -308,7 +308,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
         if save:
             # Save the spikified data	
             os.makedirs(sub_save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
-            save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+            save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             np.save(save_data, arr=spikified, allow_pickle=True)
             save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,thresholds,downsampled_fs,chunk_size)
             print(f'Saved UP-DOWN DataSet - {i}')
@@ -473,10 +473,9 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         print(f"Frequency: {liset.fs} Hz")
         print("Loaded LFPs:",dataset_path)
 
-        if spike_downsampled:
-            factor=liset.fs//spike_downsampled
-        else:
-            factor=1
+      
+        factor=liset.fs//spike_downsampled if spike_downsampled else 1
+   
 
         if filtered is None:
             filtered_liset=np.zeros((int(liset.data.shape[0]//factor),int(liset.data.shape[1])))
@@ -497,7 +496,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             if spike_downsampled:
                 path=os.path.join(up_down_path, f"spikes_downsampled_{spike_downsampled}Hz.npy")
             else:
-                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             up_down= np.load(path)
             print("Loaded UP/DN SPikes:", path)
         else:
@@ -841,7 +840,7 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
             print("Filtered Loaded")
 
         if spikified is None:
-            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             up_down= np.load(path)
             print("Loaded UP/DN SPikes:", path)
         else:
@@ -901,9 +900,10 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
 
         ax.plot(time, filtered[:,channel], label='Original Signal', color='black')
         ax.plot(time, reconstructed_signal[:,channel], label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
+        print("Ripples in Window:", len(window_ripples))
         for ripple in window_ripples:
             fill_GT = ax.fill_between([ripple[0] / liset.fs, ripple[1] / liset.fs],  min_val, max_val, color="lightblue", alpha=0.3)
-        
+            print("Ripple start:", round(ripple[0] / liset.fs,3), "s end:", round(ripple[1] / liset.fs))
         peak=max(np.max(filtered[:,channel]),0.5)
         trough=min(np.min(filtered[:,channel]),-0.5)
         mean=np.mean(filtered[:,channel])
@@ -957,4 +957,4 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
         np.save(save_data, arr=downsampled, allow_pickle=True)
         print(f'Saved DOWNsampled UP-DOWN DataSet - {dataset}')
 
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[1,2,3,4],window=[300000,1000000],id=0,spikes=True) 
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[0],window=[0,1000000],id=0,spikes=True) 

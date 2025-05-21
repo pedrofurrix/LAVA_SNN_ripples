@@ -173,7 +173,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     dataset_id = 0
     for dataset in os.listdir(parent):
         dataset_path = os.path.join(parent, dataset)
-        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, verbose=False)
+        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, verbose=False)
 
         ripples=np.array(liset.ripples_GT)
         spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
@@ -192,14 +192,13 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
             channel_signal = liset.data[:time_max*liset.fs, channel]
             filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
             thresholds.append(round(calculate_threshold(filtered_signal,liset.fs,window_size,sample_ratio,scaling_factor),4))
-            config[dataset]["thresholds"][channel]=thresholds[channel]
-            
+            config[dataset]["thresholds"][channel]=thresholds[channel]  
             if thresholds[channel] > 0.1:
                 channel_signal = liset.data[:, channel]
                 curr_ripple_id = 0     # Keep track of the current GT event index since it is monotonically increasing the timestep
                 filtered_liset=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
                 spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],liset.fs,refractory)
-                downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],factor )
+                downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],factor)
                 
                 for i in range(0, liset.data.shape[0], WINDOW_SHIFT*factor):
                     left, right = i, i+WINDOW_SIZE*factor
