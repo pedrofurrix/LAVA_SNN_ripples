@@ -253,7 +253,7 @@ def calculate_average_spike_rate(spike_train,downsampled_fs=0):
     return afr
 
 
-def extract_spikes_downsample(spike_train,factor):
+def extract_spikes_downsample(spike_train,factor,verbose=False):
     """
     Downsamples a binary (UP/DOWN) spike train from original_freq to target_freq
     keeping at most 1 spike per ms. Chooses the direction with more spikes in each window.
@@ -272,7 +272,8 @@ def extract_spikes_downsample(spike_train,factor):
     
     # Trim excess samples if needed
     trimmed = spike_train[:n_bins * factor]
-    
+    # Total spikes before downsampling
+    total_spikes_before = np.sum(trimmed)
     # Reshape to (n_bins, factor, 2)
     # Each row corresponds to 1 ms window with 30 time points of 2D spikes (UP/DOWN)
     reshaped = trimmed.reshape(n_bins, factor, 2)
@@ -288,8 +289,16 @@ def extract_spikes_downsample(spike_train,factor):
     result[up_sum > down_sum, 0] = 1  # UP spike
     result[down_sum > up_sum, 1] = 1  # DOWN spike
     # If equal or both zero → remains [0, 0]
-    
-    return result
+    # Total spikes after downsampling
+    total_spikes_after = np.sum(result)
+    # Print lost spike count
+    spikes_lost = total_spikes_before - total_spikes_after
+    if verbose:
+        print(f"Total spikes before: {total_spikes_before}")
+        print(f"Total spikes after: {total_spikes_after}")
+        print(f"Spikes lost during downsampling: {spikes_lost}")
+
+    return result,spikes_lost
 
 
 def average_downsampling(signal,factor):

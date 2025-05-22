@@ -7,7 +7,7 @@ from extract_Nripples.utils_encoding import *
 import random
 
 def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,sample_ratio, scaling_factor, 
-                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor):
+                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,fraction=1):
 # Split the Input Data and Ground Truth into Windows
     windowed_input_data = []    # Input Data Windows
     windowed_gt = []        # Ground Truth Windows (spike time if HFO, -1 if no HFO)
@@ -25,13 +25,15 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
     dataset_id = 0
     for k,dataset in enumerate(os.listdir(parent)):
         dataset_path = os.path.join(parent, dataset)
-        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, verbose=False)
+        liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
+        downsample_factor=liset.fs//downsampled_fs
+        liset=TrainData(liset,fraction)
 
-        ripples=np.array(liset.ripples_GT)
-        spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
-        filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
+        ripples=np.array(liset.ripples_GT)//downsample_factor
+        spikified=np.zeros((liset.data.shape[0]//downsample_factor, liset.data.shape[1], 2))
+        filtered=np.zeros((liset.data.shape[0]//downsample_factor, liset.data.shape[1]))
         thresholds = []
-        downsampled=np.zeros((liset.data.shape[0]//factor, liset.data.shape[1], 2))
+        downsampled=np.zeros((spikified.shape[0]//factor, liset.data.shape[1], 2))
         print("Dataset: ", dataset)
         print("data shape: ", liset.data.shape)
         print("ripples shape: ", ripples.shape)
@@ -46,14 +48,16 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
             filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
             thresholds.append(round(calculate_threshold(filtered_signal,liset.fs,window_size,sample_ratio,scaling_factor),4))
             config[dataset]["thresholds"][channel]=thresholds[channel]
+            
             if thresholds[channel] > 0.1:
                 channel_signal = liset.data[:, channel]
                 curr_ripple_id = 0  # Keep track of the current GT event index since it is monotonically increasing the timestep
                 filtered_liset=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],liset.fs,refractory)
-                downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],factor )
+                filtered[:,channel]=decimation_downsampling(filtered_liset,downsample_factor)
+                spikified[:, channel, :]=up_down_channel(filtered[:,channel],thresholds[channel],downsampled_fs,refractory)
+                downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],factor)
                 
-                for i in range(0, liset.data.shape[0], WINDOW_SHIFT*factor):
+                for i in range(0, downsampled.shape[0], WINDOW_SHIFT*factor):
                     left, right = i, i+WINDOW_SIZE*factor
                     # Get the current input window
                     curr_window = spikified[left:right, channel, :]
@@ -156,7 +160,7 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
 
 
 def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_size,sample_ratio, scaling_factor, 
-                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor):
+                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,fraction=1):
 # Split the Input Data and Ground Truth into Windows
     windowed_input_data = []    # Input Data Windows
     windowed_gt = []        # Ground Truth Windows (spike time if HFO, -1 if no HFO)
@@ -167,19 +171,20 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     skipped_hfo_count = 0   # Counts the nº of skipped HFOs due to no input activations
     total_hfos=0
     # curr_ripple_times = ripples_concat[curr_ripple_id]    # Get the GT times for the current sEEG source
-
+    
     # LOAD THE DATA
     # Iterate over the datasets
     dataset_id = 0
     for dataset in os.listdir(parent):
         dataset_path = os.path.join(parent, dataset)
-        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, verbose=False)
-
-        ripples=np.array(liset.ripples_GT)
-        spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
-        filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
+        liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
+        liset=TrainData(liset,fraction)
+        downsample_factor=liset.fs//downsampled_fs
+        ripples=np.array(liset.ripples_GT)//downsample_factor
+        spikified=np.zeros((liset.data.shape[0]//downsample_factor, liset.data.shape[1], 2))
         thresholds = []
-        downsampled=np.zeros((liset.data.shape[0]//factor, liset.data.shape[1], 2))
+        downsampled=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1], 2))
+
         print("data shape: ", liset.data.shape)
         print("ripples shape: ", ripples.shape)
         # print("Head of data_concat: ", data[:10][:])
@@ -191,16 +196,25 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
         for channel in range(liset.data.shape[1]):
             channel_signal = liset.data[:time_max*liset.fs, channel]
             filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-            thresholds.append(round(calculate_threshold(filtered_signal,liset.fs,window_size,sample_ratio,scaling_factor),4))
+            if downsample_factor>1:
+                filtered_signal=decimation_downsampling(filtered_signal,downsample_factor)
+            thresholds.append(round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
             config[dataset]["thresholds"][channel]=thresholds[channel]  
             if thresholds[channel] > 0.1:
                 channel_signal = liset.data[:, channel]
                 curr_ripple_id = 0     # Keep track of the current GT event index since it is monotonically increasing the timestep
                 filtered_liset=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],liset.fs,refractory)
-                downsampled[:,channel,:]=extract_spikes_downsample(spikified[:,channel,:],factor)
+                if downsample_factor>1:
+                    filtered_liset=decimation_downsampling(filtered_liset,downsample_factor)
+                    # filtered_liset=average_downsampling(filtered_liset,downsample_factor)
+                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                # spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                if factor>1:
+                    downsampled[:,channel,:],spikes_lost=extract_spikes_downsample(spikified[:,channel,:],factor)
+                else:
+                    downsampled[:,channel,:]=spikified[:,channel,:]
                 
-                for i in range(0, liset.data.shape[0], WINDOW_SHIFT*factor):
+                for i in range(0, spikified.shape[0], WINDOW_SHIFT*factor):
                     left, right = i, i+WINDOW_SIZE*factor
                     # Get the current input window
                     curr_window = spikified[left:right, channel, :]
@@ -341,22 +355,6 @@ def only_some_channels_per_ripple(windows, gt, ripple_ids, top_channels):
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def drop_linear(score, threshold, inverse=False, max_prob=1.0, multiplier=1.0,decay=3.0):
     # Compute directional difference
     diff = (threshold - score) if inverse else (score - threshold)
@@ -469,3 +467,27 @@ def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET,
 
 
 
+class TrainData:
+    def __init__(self, liset,fraction,beginning=True):
+        self.id_train=int(liset.data.shape[0]*fraction)
+        self.fs=liset.fs
+        self.get_data(liset,beginning)
+        
+    
+    def get_data(self,liset,beginning):
+
+        if beginning:
+            self.data=liset.data[:self.id_train,:]
+              # Keep only ripples that start within the training data range
+            self.ripples_GT = liset.ripples_GT[
+                (liset.ripples_GT[:, 0] < self.id_train)
+            ]
+        else:
+            self.data = liset.data[self.id_train:, :]
+            # Ripples that start after id_train
+            mask = liset.ripples_GT[:, 1] >= self.id_train
+            filtered_ripples = liset.ripples_GT[mask]
+            # Shift indices to match new data segment
+            self.ripples_GT = filtered_ripples - self.id_train
+
+      

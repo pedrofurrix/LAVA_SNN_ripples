@@ -18,27 +18,27 @@ RIPPLE_CONFIDENCE_WINDOW = int(round(RIPPLE_DETECTION_OFFSET[1] * 1.8))
 # FR_CONFIDENCE_WINDOW = int(round(FR_DETECTION_OFFSET[1] * 2.2))
 # BOTH_CONFIDENCE_WINDOW = int(round(BOTH_DETECTION_OFFSET[1] * 2.2))
 
-def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000,detection_window=RIPPLE_DETECTION_OFFSET):
+def window_plot(window_signal,window_spikes,gt,downsampled_fs=1000,factor=1,detection_window=RIPPLE_DETECTION_OFFSET):
     import matplotlib.pyplot as plt
     import numpy as np
     from copy import deepcopy
-    print(len(window_signal))
+    print("Length of window signal:",len(window_signal))
     # Create a time vector for the x-axis
-    time_vector = np.linspace(0,len(window_signal),len(window_signal))/downsampled_fs # Assuming a sampling rate of 1000 Hz
-
+    time_signal = np.linspace(0,len(window_signal),len(window_signal))/(downsampled_fs*factor) # Assuming a sampling rate of 1000 Hz
+    time_spikes=np.linspace(0,len(window_spikes),len(window_spikes))/(downsampled_fs) # Assuming a sampling rate of 1000 Hz
     # Create a figure and axis
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Plot the signal
-    ax.plot(time_vector, window_signal, label='Signal', color='blue')
+    ax.plot(time_signal, window_signal, label='Signal', color='blue')
 
     # Plot the spikes
     peak=max(np.max(window_signal[:]),0.1)
     trough=min(np.min(window_signal[:]),-0.1)
     mean=np.mean(window_signal[:])
-    ax.vlines(time_vector[window_spikes[:,0] == 1],mean,peak, alpha=0.5,
+    ax.vlines(time_spikes[window_spikes[:,0] == 1],mean,peak, alpha=0.5,
             color='red', label='Positive Spikes' ,lw=0.5)
-    ax.vlines(time_vector[window_spikes[:,1] == 1], trough,mean, alpha=0.5,
+    ax.vlines(time_spikes[window_spikes[:,1] == 1], trough,mean, alpha=0.5,
             color='blue', label='Negative Spikes',lw=0.5)
 
     # Plot the ground truth (gt)

@@ -272,25 +272,32 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
         dataset_path = os.path.join(parent, i)
     
         # Load data from Liset and initialize threshold
-        liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=0, verbose=False)
-        ripples=np.array(liset.ripples_GT)
+        liset = liset_tk(dataset_path, shank=1, downsample=False, start=0, verbose=False)
+        
+      
+        factor=liset.fs//downsampled_fs
+        ripples=np.array(liset.ripples_GT)//factor
+
         print("Ripples - shape:",ripples.shape)   
-        print("Frequency:",liset.fs, "Hz")          
-        spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
-        filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
+        print("Frequency:",liset.fs, "Hz ->",downsampled_fs, "Hz")          
+        
         # Calculate the threshold for each channel if not given
         if threshold is None:
             thresholds=np.zeros(liset.data.shape[1])
             for channel in range(liset.data.shape[1]):
                 channel_signal = liset.data[:time_max*liset.fs, channel]
                 filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-                thresholds[channel]=round(calculate_threshold(filtered_signal,liset.fs,window_size,sample_ratio,scaling_factor),4)
+                if factor>1:
+                    filtered_signal=decimation_downsampling(filtered_signal,factor)
+                    # filtered_signal=average_downsampling(filtered_signal,factor)
+                thresholds[channel]=round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4)
             print("Thresholds:",thresholds)
         else:
             thresholds=np.ones(liset.data.shape[1])*threshold
 
-        sub_save_dir=os.path.join(save_dir, f"{i}",f"{liset.fs}")
-
+        sub_save_dir=os.path.join(save_dir, f"{i}",f"{downsampled_fs}")
+        filtered=np.zeros((liset.data.shape[0]//factor, liset.data.shape[1]))
+        spikified=np.zeros((liset.data.shape[0]//factor, liset.data.shape[1], 2))
         if hasattr(liset, 'data'):
             print(f'Shape of the loaded data: {liset.data.shape}')
             # Loop throough the ripples found in liset class (the ones in the range of the selected samples)
@@ -299,8 +306,12 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
                 # Find the peaks above the threshold, extract channel data, filter and get the up/down spikes
                 channel_signal = liset.data[:, channel]
                 filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+                if factor>1:
+                    filtered_signal=decimation_downsampling(filtered_signal,factor)
+                    # filtered_signal=average_downsampling(filtered_signal,factor)
                 filtered[:,channel]=filtered_signal
-                spikified[:, channel, :]=up_down_channel_SF(filtered_signal,thresholds[channel],liset.fs,refractory)
+                # spikified[:, channel, :]=up_down_channel_SF(filtered_signal,thresholds[channel],downsampled_fs,refractory)
+                spikified[:,channel,:]=up_down_channel(filtered_signal,thresholds[channel],downsampled_fs,refractory)
         else:
             print("There is no data :(")
             return
@@ -442,9 +453,9 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
     fig.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5, 1.02))
     plt.show()
 
-def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save,spike_downsampled=False):
+def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save,spike_downsampled=False,verbose=False):
     """
-
+    
     Evaluate the encoding of the UP/DOWN spikes
 
     """
@@ -467,27 +478,30 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
     for dataset in datasets:
         metrics[dataset]={}
         dataset_path=os.path.join(parent,dataset)
-        
-        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
-        up_down_path=os.path.join(save_dir,dataset,f"{liset.fs}")
-        print(f"Frequency: {liset.fs} Hz")
-        print("Loaded LFPs:",dataset_path)
-
-      
-        factor=liset.fs//spike_downsampled if spike_downsampled else 1
-   
-
+        print("Dataset:",dataset)
+        liset=liset_tk(dataset_path, shank=1, downsample=False, start=0, verbose=False)
+        up_down_path=os.path.join(save_dir,dataset,f"{downsampled_fs}")
+        factor=liset.fs//downsampled_fs
+        ripples=liset.ripples_GT//factor
+        factor_spikes=1 if not spike_downsampled else downsampled_fs//spike_downsampled
+        overall_factor=factor*factor_spikes
+        if verbose:
+            print(f"Frequency: {downsampled_fs} Hz")
+            print("Loaded LFPs:",dataset_path)
+    
         if filtered is None:
-            filtered_liset=np.zeros((int(liset.data.shape[0]//factor),int(liset.data.shape[1])))
-
+            filtered_liset=np.zeros((int(liset.data.shape[0]//overall_factor),int(liset.data.shape[1])))
             channels=[i for i in range(liset.data.shape[1])]
             for channel in channels:
-                print("Channel:", channel+1)
+                if verbose:
+                    print("Channel:", channel+1)
                 channel_filtered=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
-                if spike_downsampled:
-                    filtered_liset[:,channel]=decimation_downsampling(channel_filtered,factor)
-                else:
-                    filtered_liset[:,channel]=channel_filtered
+                if overall_factor>1:
+                    filtered_liset[:,channel]=decimation_downsampling(channel_filtered,overall_factor)
+                    # filtered_liset[:,channel]=average_downsampling(channel_filtered,factor)
+                if verbose:
+                    print("Downsampling factor:",overall_factor)   
+
         else:
             filtered_liset=filtered
             print("Filtered Loaded")
@@ -498,7 +512,8 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             else:
                 path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             up_down= np.load(path)
-            print("Loaded UP/DN SPikes:", path)
+            if verbose:
+                print("Loaded UP/DN SPikes:", path)
         else:
             up_down=spikified
             print("Spikified Loaded")
@@ -513,7 +528,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         # Reconstruct the signal
         reconstructed_signal=np.zeros((up_down.shape[0],up_down.shape[1]))
         
-        ripples=liset.ripples_GT if not spike_downsampled else np.array(liset.ripples_GT)//factor
+        
 
         for channel in channels:
             metrics[dataset][channel]={}
@@ -531,6 +546,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
 
         # Calculate error metrics between the original and reconstructed signal
         for channel in channels:
+            print("Channel:", channel+1)
             s_full = filtered_liset[:, channel]
             r_full = reconstructed_signal[:, channel]
             spikes_full = up_down[:, channel, 0] + up_down[:, channel, 1]
@@ -540,9 +556,11 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                 "SNR": calculate_snr(s_full, r_full),
                 "RMSE": calculate_rmse(s_full, r_full),
                 "R_squared": calculate_r_squared(s_full, r_full),
-                "AFR": calculate_average_spike_rate(spikes_full,liset.fs//factor)
+                "AFR": calculate_average_spike_rate(spikes_full,downsampled_fs//factor_spikes)
             }
 
+            if verbose:
+                print("General Metrics:\n",metrics[dataset][channel]["general"]) 
             # Calculate metrics for ripples
             # --- Ripple metrics (average across ripple windows)
             snrs, rmses, r2s, afrs = [], [], [], []
@@ -556,7 +574,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                 snrs.append(calculate_snr(s, r))
                 rmses.append(calculate_rmse(s, r))
                 r2s.append(calculate_r_squared(s, r))
-                afrs.append(calculate_average_spike_rate(spikes,liset.fs//factor))
+                afrs.append(calculate_average_spike_rate(spikes,downsampled_fs//factor_spikes))
 
             # Store averaged ripple metrics
             if snrs:  # in case ripples is empty
@@ -573,8 +591,15 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                     "R_squared": None,
                     "AFR": None
                 }
+            print("Ripple Metrics:\n",metrics[dataset][channel]["ripples"])
         total_up_spikes = int(np.sum(up_down[:, :, 0]))
         total_down_spikes = int(np.sum(up_down[:, :, 1]))
+        if verbose:
+            print("Total Dataset:",dataset)
+            print("Total UP Spikes:", total_up_spikes)
+            print("Total DOWN Spikes:", total_down_spikes)
+            print("Total Spikes:", total_up_spikes + total_down_spikes)
+
         metrics[dataset]["total_up_spikes"] = total_up_spikes
         metrics[dataset]["total_down_spikes"] = total_down_spikes
         metrics[dataset]["total_spikes"] = total_up_spikes + total_down_spikes
@@ -591,7 +616,9 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             "R_squared": float(np.mean([metrics[dataset][channel]["ripples"]["R_squared"] for channel in channels])),
             "AFR": float(np.mean([metrics[dataset][channel]["ripples"]["AFR"] for channel in channels]))
         }
-
+        if verbose:
+            print("Average Channels Metrics:\n",metrics[dataset]["average_channels"])
+            print("Average Ripples Metrics:\n",metrics[dataset]["average_ripples"])
         # Accumulate UP/DOWN spike counts
         total_up_all += total_up_spikes
         total_down_all += total_down_spikes
@@ -609,7 +636,6 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         global_metrics_sum["AFR_ripples"].append(metrics[dataset]["average_ripples"]["AFR"])
 
     overall_total_spikes = total_up_all + total_down_all
-
     overall_metrics = {
         "total_spikes": overall_total_spikes,
         "total_up_spikes": total_up_all,
@@ -627,7 +653,8 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             "AFR": float(np.mean(global_metrics_sum["AFR_ripples"]))
         }
     }
-        
+    if verbose:
+        print("Overall Metrics:\n", overall_metrics)
     metrics["overall_metrics"] = overall_metrics
 
     # Save the metrics
@@ -635,9 +662,9 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         os.makedirs(save_dir, exist_ok=True)
         ############## Save the metrics ##################	
         if spike_downsampled:
-            metrics_path=os.path.join(save_dir,f"metrics_{liset.fs}_{spike_downsampled}Hz.json")
+            metrics_path=os.path.join(save_dir,f"metrics_{downsampled_fs}_{spike_downsampled}Hz.json")
         else:
-            metrics_path=os.path.join(save_dir,f"metrics_{liset.fs}.json")
+            metrics_path=os.path.join(save_dir,f"metrics_{downsampled_fs}.json")
         with open(metrics_path, 'w') as f:
             json.dump(metrics, f, indent=4)  # optional: indent=4 for readability
         print(f"Metrics saved in {metrics_path}")
@@ -814,7 +841,7 @@ def plot_ripple_stats(parent=parent,downsampled_fs=downsampled_fs):
         print("No ripple data found.")
     
 
-def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=None,window=[],id=0,spikes=True):
+def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=None,window=[],id=0,spikes=True,downsampled_spikes=False):
     """
     Plot the reconstruction of the UP/DOWN spikes
 
@@ -825,23 +852,36 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     datasets=[dirs[id]]
     for dataset in datasets:
         dataset_path=os.path.join(parent,dataset)
-        liset= liset_tk(dataset_path, shank=1, downsample=downsampled_fs, start=0, verbose=False)
-        up_down_path=os.path.join(save_dir,dataset,f"{liset.fs}")
+        liset= liset_tk(dataset_path, shank=1, downsample=False, start=0, verbose=False)
+        factor=liset.fs//downsampled_fs
+        up_down_path=os.path.join(save_dir,dataset,f"{downsampled_fs}")
+        factor_spikes=1 if not downsampled_spikes else downsampled_fs//downsampled_spikes
         print("Loaded LFPs:",dataset_path)
+        overall_factor=factor*factor_spikes
+
+        ripples=liset.ripples_GT//overall_factor
         if channels is None:
             channels=[i for i in range(liset.data.shape[1])]
         if filtered is None:
-            filtered_liset=np.zeros((int(liset.data.shape[0]),len(channels)))
+            filtered_liset=np.zeros((int(liset.data.shape[0]//(overall_factor)),len(channels)))
             for i,channel in enumerate(channels):
                 print("Channel:", channel+1)
-                filtered_liset[:,i]=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
+                filtered=bandpass_filter(liset.data[:,channel], bandpass=bandpass, fs=liset.fs)
+                if overall_factor>1:
+                    filtered_liset[:,i]=decimation_downsampling(filtered,overall_factor)
+                else:
+                    filtered_liset[:,i]=filtered
         else:
             filtered_liset=filtered[:,channels]
             print("Filtered Loaded")
 
         if spikified is None:
-            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
+            if downsampled_spikes:
+                path=os.path.join(up_down_path, f"spikes_downsampled_{downsampled_spikes}Hz.npy")
+            else:
+                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             up_down= np.load(path)
+
             print("Loaded UP/DN SPikes:", path)
         else:
             up_down=spikified
@@ -854,10 +894,10 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
         print(f'Shape of the filtered data: {filtered_liset.shape}')
         print(f'Shape of the UP/DN data: {up_down.shape}')
 
-       
+
         # Reconstruct the signal
         reconstructed_signal=np.zeros((up_down.shape[0],len(channels)))
-        print("R")
+        print("Reconstructing Signal...")
         for i,channel in enumerate(channels):
             # reconstructed_signal[0,i]=filtered_liset[0,i]
             reconstructed_signal[0, i] = 0
@@ -875,23 +915,22 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
                     reconstructed_signal[t, i] = reconstructed_signal[t - 1, i]
             print(both_counter)
 
-    ripple_ids=liset.ripples_GT
     fig,axes=plt.subplots(len(channels),figsize=(int(12),int(4*len(channels))),sharex=True,sharey=False,constrained_layout=False)
     
     if len(channels) == 1:
         axes = [axes]  # ensure axes is always a list   
-    
+    window=np.array(window)//overall_factor
     filtered=filtered_liset[window[0]:window[1],:]
     up_down_ripple=up_down[window[0]:window[1],:,:]
     print("Filtered shape:",filtered.shape)
     print("Reconstructed shape:",reconstructed_signal.shape)
     print("UP/DOWN shape:",up_down_ripple.shape)
 
-    time = np.linspace(window[0] / liset.fs, window[1] /  liset.fs, filtered.shape[0])
+    time = np.linspace(window[0] / (liset.fs//overall_factor), window[1] /  (liset.fs//overall_factor), filtered.shape[0])
     print("Time length", len(time))
     reconstructed_signal=reconstructed_signal[window[0]:window[1],:]
-    mask = (liset.ripples_GT[:, 1] >= window[0]) & (liset.ripples_GT[:, 0] <= window[1])
-    window_ripples = liset.ripples_GT[mask]
+    mask = (ripples[:, 1] >= window[0]) & (ripples[:, 0] <= window[1])
+    window_ripples = ripples[mask]
     
     for channel in range(len(channels)):
         min_val=filtered[:,channel].min()*1.2
@@ -902,8 +941,8 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
         ax.plot(time, reconstructed_signal[:,channel], label='Reconstructed Signal', linestyle="--",alpha=0.6, color='green')
         print("Ripples in Window:", len(window_ripples))
         for ripple in window_ripples:
-            fill_GT = ax.fill_between([ripple[0] / liset.fs, ripple[1] / liset.fs],  min_val, max_val, color="lightblue", alpha=0.3)
-            print("Ripple start:", round(ripple[0] / liset.fs,3), "s end:", round(ripple[1] / liset.fs))
+            fill_GT = ax.fill_between([ripple[0] / (liset.fs//overall_factor), ripple[1] / (liset.fs//overall_factor)],  min_val, max_val, color="lightblue", alpha=0.3)
+            print("Ripple start:", round(ripple[0] / (liset.fs//overall_factor) ,3), "s end:", round(ripple[1] / (liset.fs//overall_factor),3))
         peak=max(np.max(filtered[:,channel]),0.5)
         trough=min(np.min(filtered[:,channel]),-0.5)
         mean=np.mean(filtered[:,channel])
@@ -930,31 +969,43 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     plt.show()
     return fig,axes
 
-def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent=parent,bandpass=bandpass,save_dir=save_dir):
+def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent=parent,bandpass=bandpass,save_dir=save_dir,verbose=False):
     datasets=os.listdir(parent)
+    total_lost=0
+    total_spikes=0
     for dataset in datasets:
         dataset_path=os.path.join(parent,dataset)
         up_down_path=os.path.join(save_dir,dataset,f"{original_freq}")
+        total_lost_dataset=0
         print("Loaded LFPs:",dataset_path)
 
         if spikified is None:
-            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
+            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
             up_down= np.load(path)
             print("Loaded UP/DN SPikes:", path)
         else:
             up_down=spikified
             print("Spikified Loaded")
-
+        total_spikes_dataset=np.sum(up_down[:,:,0]) + np.sum(up_down[:,:,1])
         factor=original_freq//target_freq
+        print("Factor:", factor)
         downsampled=np.zeros((int(up_down.shape[0]//factor),up_down.shape[1],up_down.shape[2]))
         print(up_down.shape)
         for channel in range(up_down.shape[1]):
-            downsampled[:,channel,:]=extract_spikes_downsample(up_down[:,channel,:],factor)
-
+            downsampled[:,channel,:],spikes_lost=extract_spikes_downsample(up_down[:,channel,:],factor,verbose=verbose)
+            total_lost_dataset+=spikes_lost
+        if verbose:
+            print("Total spikes lost:",total_lost_dataset)
+            print("Total spikes dataset:",total_spikes_dataset)
+        total_lost+=total_lost_dataset
+        total_spikes+=total_spikes_dataset
+        
         # Save the downsampled data
         os.makedirs(up_down_path, exist_ok=True)  # <-- creates directory if it doesn't exist
         save_data=os.path.join(up_down_path, f'spikes_downsampled_{target_freq}Hz.npy')
         np.save(save_data, arr=downsampled, allow_pickle=True)
         print(f'Saved DOWNsampled UP-DOWN DataSet - {dataset}')
-
-plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=False,parent=parent,save=save, channels=[0],window=[0,1000000],id=0,spikes=True) 
+    print(f"Total spikes lost (all datasets): {total_lost} ({round(total_lost/total_spikes*100,2)}%) out of {total_spikes} total spikes")
+    print(f"Total spikes Downsampled: {total_spikes-total_lost})")
+    
+# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save, channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False)
