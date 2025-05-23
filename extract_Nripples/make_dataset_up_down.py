@@ -482,9 +482,10 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
         liset=liset_tk(dataset_path, shank=1, downsample=False, start=0, verbose=False)
         up_down_path=os.path.join(save_dir,dataset,f"{downsampled_fs}")
         factor=liset.fs//downsampled_fs
-        ripples=liset.ripples_GT//factor
+        
         factor_spikes=1 if not spike_downsampled else downsampled_fs//spike_downsampled
         overall_factor=factor*factor_spikes
+        ripples=liset.ripples_GT//overall_factor
         if verbose:
             print(f"Frequency: {downsampled_fs} Hz")
             print("Loaded LFPs:",dataset_path)
@@ -499,6 +500,8 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                 if overall_factor>1:
                     filtered_liset[:,channel]=decimation_downsampling(channel_filtered,overall_factor)
                     # filtered_liset[:,channel]=average_downsampling(channel_filtered,factor)
+                else:
+                    filtered_liset[:,channel]=channel_filtered
                 if verbose:
                     print("Downsampling factor:",overall_factor)   
 

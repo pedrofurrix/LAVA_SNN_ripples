@@ -207,8 +207,8 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                 if downsample_factor>1:
                     filtered_liset=decimation_downsampling(filtered_liset,downsample_factor)
                     # filtered_liset=average_downsampling(filtered_liset,downsample_factor)
-                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
-                # spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                # spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
                 if factor>1:
                     downsampled[:,channel,:],spikes_lost=extract_spikes_downsample(spikified[:,channel,:],factor)
                 else:
