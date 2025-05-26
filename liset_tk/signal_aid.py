@@ -25,6 +25,33 @@ def bandpass_filter(signal, bandpass, fs, order=4):
 
     return filtered_signal
 
+def highpass_filter(signal, highpass, fs, order=4):
+    """
+    Applies a Butterworth high-pass filter to the input signal.
+    
+    Parameters:
+    - signal: 1D NumPy array, the signal to filter
+    - highpass: float, the cutoff frequency in Hz
+    - fs: float, the sampling frequency in Hz
+    - order: int, the order of the filter (default = 4)
+    
+    Returns:
+    - filtered_signal: 1D NumPy array, the filtered signal
+    """
+    # Define cutoff frequency for highpass filter
+
+    # Calcular las frecuencias de corte normalizadas
+    nyquist_freq = 0.5 * fs  # Frecuencia de Nyquist para una señal con frecuencia de muestreo de 1000 Hz
+    normalized_cutoff= highpass / nyquist_freq
+
+    # Diseñar el filtro pasa-bandas de Butterworth
+    b, a = butter(order, normalized_cutoff, btype='high')
+
+    # Aplicar el filtro a la señal
+    filtered_signal = filtfilt(b, a, signal)
+
+    return filtered_signal
+
 
 def most_active_channel(window, chans = 8):
     max_distance = 0

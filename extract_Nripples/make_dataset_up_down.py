@@ -5,7 +5,7 @@ liset_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../liset_t
 sys.path.insert(0, liset_path)
 
 from liset_aux import ripples_std, middle
-from signal_aid import most_active_channel, bandpass_filter
+from signal_aid import most_active_channel, bandpass_filter,highpass_filter
 
 from utils_encoding import *
 import matplotlib.pyplot as plt
@@ -21,11 +21,11 @@ from matplotlib.lines import Line2D
 
 #### LAB PC
 # parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
-parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
+# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
 
 ### HOME PC
 # parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
-# parent=r"E:\neurospark_mat\Download_from_paper"
+parent=r"E:\neurospark_mat\Download_from_paper"
 
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
@@ -453,7 +453,8 @@ def plot_channels(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpa
     fig.legend(handles=legend_elements, loc='upper center', ncol=4, bbox_to_anchor=(0.5, 1.02))
     plt.show()
 
-def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save,spike_downsampled=False,verbose=False):
+def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,
+                      parent=parent,save=save,highpass=False,spike_downsampled=False,verbose=False):
     """
     
     Evaluate the encoding of the UP/DOWN spikes
@@ -525,6 +526,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             parameters=json.load(f)
             thresholds=parameters["threshold"]
             metrics[dataset]["parameters"]=parameters
+            metrics[dataset]["parameters"]["highpass"]=highpass
         print(f'Shape of the filtered data: {filtered_liset.shape}')
         print(f'Shape of the UP/DN data: {up_down.shape}')
 
@@ -546,6 +548,8 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
                     reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel] - thresholds[channel]
                 else:
                     reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel]
+            if highpass:
+                reconstructed_signal[:, channel] = highpass_filter(reconstructed_signal[:, channel], fs=downsampled_fs, highpass=highpass)
 
         # Calculate error metrics between the original and reconstructed signal
         for channel in channels:
@@ -844,7 +848,9 @@ def plot_ripple_stats(parent=parent,downsampled_fs=downsampled_fs):
         print("No ripple data found.")
     
 
-def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=None,window=[],id=0,spikes=True,downsampled_spikes=False):
+def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,
+                              downsampled_fs=downsampled_fs,parent=parent,save=save, channels=None,window=[],
+                              id=0,spikes=True,downsampled_spikes=False,highpass=False):
     """
     Plot the reconstruction of the UP/DOWN spikes
 
@@ -916,6 +922,8 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
                     reconstructed_signal[t, i] = reconstructed_signal[t - 1, i] - thresholds[channel]
                 else:
                     reconstructed_signal[t, i] = reconstructed_signal[t - 1, i]
+            if highpass:
+                reconstructed_signal[:, i] = highpass_filter(reconstructed_signal[:, i], fs=downsampled_fs, highpass=highpass)
             print(both_counter)
 
     fig,axes=plt.subplots(len(channels),figsize=(int(12),int(4*len(channels))),sharex=True,sharey=False,constrained_layout=False)
@@ -1011,4 +1019,5 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
     print(f"Total spikes lost (all datasets): {total_lost} ({round(total_lost/total_spikes*100,2)}%) out of {total_spikes} total spikes")
     print(f"Total spikes Downsampled: {total_spikes-total_lost})")
     
-# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save, channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False)
+# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=30000,parent=parent,save=save,
+#                           channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False,highpass=5)

@@ -199,6 +199,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
             if downsample_factor>1:
                 filtered_signal=decimation_downsampling(filtered_signal,downsample_factor)
             thresholds.append(round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
+            # thresholds.append(round(threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
             config[dataset]["thresholds"][channel]=thresholds[channel]  
             if thresholds[channel] > 0.1:
                 channel_signal = liset.data[:, channel]
@@ -207,8 +208,8 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                 if downsample_factor>1:
                     filtered_liset=decimation_downsampling(filtered_liset,downsample_factor)
                     # filtered_liset=average_downsampling(filtered_liset,downsample_factor)
-                # spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
-                spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+                # spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
                 if factor>1:
                     downsampled[:,channel,:],spikes_lost=extract_spikes_downsample(spikified[:,channel,:],factor)
                 else:
@@ -289,6 +290,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                 total_hfos+=ripples.shape[0]
             else:
                 print(f"[WARNING] Channel {channel} has a very low threshold. Skipping...")
+        print("Thresholds: ", thresholds)
         dataset_id+=liset.ripples_GT.shape[0]
         
     # Convert to numpy array

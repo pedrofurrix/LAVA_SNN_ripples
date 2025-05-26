@@ -79,7 +79,7 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
         plot_threshold_hist(max_min_amplitude[:,0],max_min_amplitude[:,1],threshold_up*scaling_factor,bins=20)
     return scaling_factor*(threshold_up + threshold_dn)
 
-def threshold_percentile(signal,downsampled_fs,window_size,scaling_factor,percentile,plot=False):
+def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_factor,plot=False):
     times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
 
     min_time = np.min(times)
@@ -345,3 +345,4 @@ def decimation_downsampling(signal,factor):
     downsampled_signal = signal[::factor]
     
     return downsampled_signal
+
