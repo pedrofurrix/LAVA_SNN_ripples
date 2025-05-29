@@ -4,7 +4,6 @@ from snntorch import spikegen
 
 # Use labels by default unless target_is_time = True
 
-
 class SpikeTimePenalty(nn.Module):
     """
     Used by ce_temporal_loss and mse_temporal_loss to convert spike
@@ -24,7 +23,8 @@ class SpikeTimePenalty(nn.Module):
         tolerance=0,
         multi_spike=False,
         # Penalty Factor for Extreme Cases (Default: 1 for no penalty)
-        penalty_factor=1.0,
+        fn_penalty_factor=1.0,
+        fp_penalty_factor=1.0,
     ):
         super().__init__()
 
@@ -32,7 +32,8 @@ class SpikeTimePenalty(nn.Module):
         self.tolerance = tolerance
         self.tolerance_fn = self.Tolerance.apply
         self.multi_spike = multi_spike
-        self.penalty_factor = penalty_factor
+        self.fp_penalty_factor = fp_penalty_factor
+        self.fn_penalty_factor = fn_penalty_factor
 
         if not self.target_is_time:
             self.on_target = on_target
@@ -66,7 +67,7 @@ class SpikeTimePenalty(nn.Module):
         This converts the GT events where the output neuron should not spike.
         This is done by adding a "shadow spike" at the last time step of the window.
         '''
-        targets[targets < 0] = ((spk_out.size(0) - 1) * self.penalty_factor) 
+        
     
         # now operating in the spike-time domain rather than with labels
         # Consider merging multi-spike and single-spike?
@@ -79,8 +80,19 @@ class SpikeTimePenalty(nn.Module):
         else:
             # spk_time_final = self.first_spike_fn(spk_out, self.device)
             spk_time_final = self.first_spike_fn(
-                spk_out, self.penalty_factor,
+                spk_out, self.fn_penalty_factor,
             )
+    
+        
+
+        '''
+        If the target is a negative spike time, it means that the neuron should not spike.
+        In this case, we set the spike time to the last time step multiplied by the penalty factor.
+        '''
+        targets[targets < 0] = (num_steps - 1) * self.fp_penalty_factor
+        
+        mask = targets < 0
+        spk_time_final[mask & (spk_time_final >= num_steps - 1)] = (num_steps - 1) * self.fp_penalty_factor
         
         '''
         Check if any output neuron has GT != -1 near the end of the window ]num_steps-tolerance-1, num_steps-1]
@@ -205,6 +217,7 @@ class SpikeTimePenalty(nn.Module):
             non-differentiable.
             Apply sign estimator by substituting gradient for -1 ONLY at
             first spike time."""
+            
             for batch_idx in range(first_spike_time.size(0)):
                 for output_idx in range(first_spike_time.size(1)):
                     # Set the gradient to -1 at the first spike time of each output neuron of each batch.
@@ -385,7 +398,7 @@ class SpikeTimePenalty(nn.Module):
         return targets_rec
 
 
-class mse_temporal_loss_penalty():
+class mse_temporal_loss_penaltyfn_fp():
     """Mean Square Error Temporal Loss with a Penalty for Extreme Cases.
 
     Extreme cases:
@@ -485,7 +498,8 @@ class mse_temporal_loss_penalty():
         multi_spike=False,
         reduction='mean',
         weight=None,
-        penalty_factor=None,    # Penalty Factor for Extreme Cases
+        fp_penalty_factor=1.0,    # Penalty Factor for Extreme Cases
+        fn_penalty_factor=1.0,  # Penalty Factor for False Negatives
         normalize=True,
     ):
         super().__init__()
@@ -496,7 +510,7 @@ class mse_temporal_loss_penalty():
             'none' if self.weight is not None else self.reduction))
         
         self.spk_time_fn = SpikeTimePenalty(
-            target_is_time, on_target, off_target, tolerance, multi_spike, penalty_factor
+            target_is_time, on_target, off_target, tolerance, multi_spike, fn_penalty_factor,fp_penalty_factor
         )
 
         self.__name__ = "mse_temporal_loss"
@@ -536,94 +550,3 @@ class mse_temporal_loss_penalty():
                 loss = loss.mean()
 
         return loss
-
-def first_spike_acc(output, target, tolerance=0, verbose=False):
-    '''
-    Accuracy Metric to calculate the accuracy of the first spike prediction
-    ---------
-    Parameters:
-    output : torch.Tensor shape=(num_steps, batch_size, num_classes)
-        Spikes of the output neurons.
-    target : torch.Tensor shape=(batch_size, num_classes)
-        Ground truth of the network - First spike time of each output neuron
-    tolerance : int
-        Tolerance for the accuracy calculation. If the output neuron spikes within this tolerance, it is considered correct.
-    verbose : bool
-        Whether to print the output or not
-    ---------
-
-    Returns:
-    float | np.nan
-        The accuracy of the first spike prediction. If no valid predictions are found, return np.nan
-    '''
-    # Ensure the output and target are on the same device
-    output = output.to(target.device)
-
-    num_steps = output.shape[0]
-
-    # --- Calculate the accuracy ---
-    # Find the first spike time of each output neuron
-    # Shape: (batch_size, num_classes)
-    output_first_spike_time = torch.zeros(target.shape, device=target.device)    # Initialize with -1 (No Spike)
-    for class_idx in range(target.shape[1]):
-        output_first_spike_time[:, class_idx] = torch.argmax(output[:, :, class_idx], dim=0)
-    
-    # Check if the output neuron spikes at all -> If not, set the first spike time to -1
-    output_first_spike_time[torch.sum(output, dim=0) == 0] = -1
-    
-    if verbose:
-        print(f"Output First Spike Time: {output_first_spike_time} | Target: {target}")
-
-    # NOTE: If the GT Spike time is almost at the end of the window, the accuracy is not calculated correctly.
-    '''
-    Check if any output neuron has GT = 1 near the end of the window ]num_steps-tolerance-1, num_steps-1]
-    and observed spikes = 0. If so, the prediction should not be considered into the accuracy calculation,
-    '''
-    # Check if any output neuron has GT = 1 near the end of the window
-    targets_near_end_mask = (
-        ((num_steps - 1 - tolerance) < target) & (target < num_steps) 
-    )
-
-    # define mask for output neurons that did not spike (equal to -1)
-    spk_time_no_spike_mask = (output_first_spike_time == -1)
-    # Define mask combining the two masks
-    invalid_mask = targets_near_end_mask & spk_time_no_spike_mask
-    if verbose:
-        print(f"Targets Near End Mask: {targets_near_end_mask}")
-        print(f"Spk Time No Spike Mask: {spk_time_no_spike_mask}")
-        print(f"Invalid Mask: {invalid_mask}")
-    
-    '''
-    If GT is near the end and the neuron did not spike, the prediction should not be considered into the
-    accuracy calculation, since the window after the GT is < tolerance window Set the GT to -1 as well in those cases
-    '''
-    
-    # Update the output first spike time and target to exclude the invalid predictions
-    valid_mask = ~invalid_mask
-    output_first_spike_time = output_first_spike_time[~invalid_mask]
-    target = target[~invalid_mask]
-
-    # --- Calculate the spike time differences ---
-    # Before that, transform the -1 values to the end of the window
-    output_first_spike_time[output_first_spike_time == -1] = num_steps - 1
-    target[target == -1] = num_steps - 1
-
-    # accuracy = SF.accuracy_temporal(output, target)
-    spikeDiffs = torch.abs(output_first_spike_time - target)
-    if verbose:
-        print(f"Spike Diffs: {spikeDiffs}")
-
-    # Check if the spike time differences are within the tolerance window
-    # Shape: (batch_size, num_classes)
-    spikeDiffsWithinTolerance = spikeDiffs < tolerance
-    
-    # Calculate the accuracy
-    # Shape: ()
-    accuracy = torch.mean(spikeDiffsWithinTolerance.float())
-
-    if verbose:
-        print(f"Accuracy Value: {accuracy*100}%\n====================\n")
-    
-    return accuracy
-
-# TODO: Fix the accuracy calculation

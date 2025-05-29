@@ -166,12 +166,12 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     windowed_gt = []        # Ground Truth Windows (spike time if HFO, -1 if no HFO)
     filtered_windows=[] 
     ripple_ids=[]
-
+    
     total_windows_count = 0
     skipped_hfo_count = 0   # Counts the nº of skipped HFOs due to no input activations
     total_hfos=0
     # curr_ripple_times = ripples_concat[curr_ripple_id]    # Get the GT times for the current sEEG source
-    
+    would_be_non_ripple=0
     # LOAD THE DATA
     # Iterate over the datasets
     dataset_id = 0
@@ -259,13 +259,19 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                         curr_ripple_id=ripples.shape[0]-1
                 
                     cur_gt_time = ripples[curr_ripple_id]      
-                    if (cur_gt_time[0] >= left) and (cur_gt_time[0] <= right):
+                    if (cur_gt_time[1] >= left) and (cur_gt_time[0] <= right):
                         '''
                             Check if the current window overlaps with the current GT event
                             The Network may spike in the interval [GT_time[0], GT_time[0] + MEAN_HFO_DURATION + PRED_GT_TOLERANCE]
                             However, we are using an upper limit for the HFO Duration of WINDOW_SIZE.
                             This way, the Ground Truth Timestamps will be clamped uppwards by WINDOW_SIZE - MAX_HFO_DURATION + MEAN_HFO_DURATION
                         '''
+                        if cur_gt_time[0]<left:
+                            #TODO: Check if the GT event starts before the window starts 
+                            # THIS IS DEBUGGING
+                            print(f"[WARNING] GT event {cur_gt_time} starts before the window [{left}:{right}]. Skipping...")
+                            would_be_non_ripple+=1
+                            continue
                         if  cur_gt_time[0] + MAX_DETECTION_OFFSET*factor<=right: # If the GT event is completely within the current window
                             '''The Network should predict the HFO -> Calculate the spike time
                             Let's assume the network should spike at the end of the relevant event. We have no way of knowing
@@ -306,7 +312,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     print("Windowed Input Data Shape: ", windowed_input_data.shape)
     print("Windowed GT Shape: ", windowed_gt.shape)
     print("Filtered Windows Shape: ", filtered_windows.shape)
-    
+    print("TOTAL WINDOWS SKIPPED DUE TO RIPPLE STARTING BEFORE WINDOW: ", would_be_non_ripple)
     return  windowed_input_data, windowed_gt, filtered_windows, ripple_ids, config
 
 
@@ -471,20 +477,22 @@ def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET,
 
 class TrainData:
     def __init__(self, liset,fraction,beginning=True):
-        self.id_train=int(liset.data.shape[0]*fraction)
+        
         self.fs=liset.fs
-        self.get_data(liset,beginning)
+        self.get_data(liset,fraction,beginning)
         
     
-    def get_data(self,liset,beginning):
+    def get_data(self,liset,fraction,beginning):
 
         if beginning:
+            self.id_train=int(liset.data.shape[0]*fraction)
             self.data=liset.data[:self.id_train,:]
               # Keep only ripples that start within the training data range
             self.ripples_GT = liset.ripples_GT[
                 (liset.ripples_GT[:, 0] < self.id_train)
             ]
         else:
+            self.id_train=int(liset.data.shape[0] * (1 - fraction))
             self.data = liset.data[self.id_train:, :]
             # Ripples that start after id_train
             mask = liset.ripples_GT[:, 1] >= self.id_train
