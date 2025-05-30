@@ -6,7 +6,7 @@ import json
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir))
 
 
-def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test Data', xlabel='Time', ylabel='Value'):
+def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test Data', xlabel='Time', ylabel='Value',input=True):
     # Load the spike data, gt and original data from npy files
     data_dir=os.path.join(parent_dir,"extract_Nripples","train_pedro","dataset_up_down",str(downsampled_fs))
     spikes= np.load(os.path.join(data_dir, f'concat_spikes.npy'))
@@ -14,16 +14,15 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     data=np.load(os.path.join(data_dir, f'concat_data.npy'))
 
     # Load output spikes
-    eval_path=os.path.join(os.path.abspath(__file__),os.pardir,"eval")
-    outputspikes = np.load(os.path.join(eval_path,"spikes", f'{prefix}_spikes_.npy'))
+    outputspikes = np.load(os.path.join(os.path.dirname(__file__),"spikes", f'{prefix}_spikes_.npy'))
     
     # Load the parameters
-    json_path = os.path.join(eval_path, f'{prefix}_results.json')
+    json_path = os.path.join(os.path.dirname(__file__),f'{prefix}_results.json')
     with open(json_path, 'r') as f:
         params = json.load(f)
-    max_detection_offset=params["max_detection_offset"]
-    refractory_period=params["refractory_period"]
-    ripple_detection_offset=params["ripple_detection_offset"]
+    max_detection_offset=params["max_detection_offset"]/1000 # Convert to seconds
+    refractory_period=params["refractory_period"] /1000*2 # Convert to seconds*2
+    ripple_detection_offset=params["ripple_detection_offset"] # Convert to seconds
 
     # Create the figure and axis
 
@@ -40,12 +39,12 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
         # Keep ripples that overlap the window [start, end)
         gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
         # Shift the ripple times to be relative to the window
-        gt = gt - start
+        gt = gt
         
         # Adjust output spikes: keep those within [start, end)
         outputspikes = outputspikes[(outputspikes >= start) & (outputspikes < end)]
-        # Shift to window-relative time
-        outputspikes = outputspikes - start
+
+
 
     # Convert to seconds
     up_spike_times = np.where(spikes[:, 0] == 1)[0]
@@ -59,28 +58,29 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     outputspikes_sec = outputspikes / 1000
 
 
-    time=range(start,end)/1000 # In seconds
+    time = np.arange(start, end) / 1000  # In seconds
     # Plot the original data
-    ax.plot(time,data+5, label='Original Data', color='blue', alpha=0.5)
+    ax.plot(time,data, label='Original Data', color='blue', alpha=0.5)
     
     # Plot the Input Up and Down Spikes
-    ax.scatter(up_spike_times_sec,np.ones_like(up_spike_times_sec)*(7), color='green', marker='^', label='Up Spikes')
-    ax.scatter(down_spike_times_sec, np.ones_like(down_spike_times_sec)*(3), color='red', marker='v', label='Down Spikes')
-    
+    if input:
+        ax.vlines(up_spike_times_sec,0,3, color='green', alpha=0.5,label='Up Spikes')
+        ax.vlines(down_spike_times_sec,-3,0, color='red',alpha=0.5, label='Down Spikes')
+        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-4, color='purple', marker='o', label='Output Spikes')
+    else:
+        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-3, color='purple', marker='o', label='Output Spikes')
+
     # Plot the Ground Truth Ripples
     for i,ripple in enumerate(gt_sec):
         label = 'Ground Truth Ripple' if i == 0 else None  # Add label only to the first
-        ax.fill_between([ripple[0], ripple[1]], 0,12, color='yellow', alpha=0.3, label=label)
-
-    # Plot the Output Spikes
-    ax.scatter(outputspikes_sec, np.zeros_like(outputspikes_sec), color='purple', marker='o', label='Output Spikes')
+        ax.fill_between([ripple[0], ripple[1]], -5,5, color='yellow', alpha=0.2, label=label)
     
     # Plot the Predicted Ripples
     spike_before = -10000  # Initialize spike_before to -10000
     for i, spike in enumerate(outputspikes_sec):
         label = 'Predicted Ripples' if i == 0 else None  # Add label only to the first
         if spike - refractory_period > spike_before:
-            ax.fill_between([spike - max_detection_offset, spike + max_detection_offset], 0, 12, color='orange', alpha=0.3, label=label)
+            ax.fill_between([spike - max_detection_offset, spike + max_detection_offset], -5, 5, color='lightblue', alpha=0.2, label=label)
             spike_before = spike
 
     # Set the title and labels
@@ -91,4 +91,5 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     plt.show()
     return fig, ax
 
-plot_livetest(prefix="test", parent_dir=parent_dir, downsampled_fs="30000_1000", window=(0, 10000), title='Live Test Data', xlabel='Time (s)', ylabel='Value')
+plot_livetest(prefix="updnb4ds_100_8", parent_dir=parent_dir, downsampled_fs="30000_1000",
+               window=(100000,150000), title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=False)
