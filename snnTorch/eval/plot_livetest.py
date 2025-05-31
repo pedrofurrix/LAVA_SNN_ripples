@@ -43,7 +43,9 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
         
         # Adjust output spikes: keep those within [start, end)
         outputspikes = outputspikes[(outputspikes >= start) & (outputspikes < end)]
-
+    else:
+        start = 0
+        end = len(data)
 
 
     # Convert to seconds
@@ -73,14 +75,14 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     # Plot the Ground Truth Ripples
     for i,ripple in enumerate(gt_sec):
         label = 'Ground Truth Ripple' if i == 0 else None  # Add label only to the first
-        ax.fill_between([ripple[0], ripple[1]], -5,5, color='yellow', alpha=0.2, label=label)
+        ax.fill_between([ripple[0], ripple[1]], -3,3, color='yellow', alpha=0.2, label=label)
     
     # Plot the Predicted Ripples
     spike_before = -10000  # Initialize spike_before to -10000
     for i, spike in enumerate(outputspikes_sec):
         label = 'Predicted Ripples' if i == 0 else None  # Add label only to the first
         if spike - refractory_period > spike_before:
-            ax.fill_between([spike - max_detection_offset, spike + max_detection_offset], -5, 5, color='lightblue', alpha=0.2, label=label)
+            ax.fill_between([spike - max_detection_offset, spike + max_detection_offset], -3, 3, color='lightblue', alpha=0.2, label=label)
             spike_before = spike
 
     # Set the title and labels
@@ -92,4 +94,4 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     return fig, ax
 
 plot_livetest(prefix="updnb4ds_100_8", parent_dir=parent_dir, downsampled_fs="30000_1000",
-               window=(100000,150000), title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=False)
+               window=(8000000,8030000), title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=False)
