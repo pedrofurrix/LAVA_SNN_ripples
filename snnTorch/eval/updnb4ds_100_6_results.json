@@ -1,0 +1,24 @@
+{
+    "ripple_detection_offset": [
+        18,
+        45,
+        31,
+        20
+    ],
+    "pred_causality_window": 5,
+    "max_detection_offset": 72.5,
+    "refractory_period_gt": 150,
+    "refractory_period_fp": 150,
+    "metrics": {
+        "true_positive": 2658,
+        "false_positive": 17141,
+        "true_negative": 8160481,
+        "false_negative": 1006,
+        "total_predictions": 8181286,
+        "accuracy": 0.99778,
+        "precision": 0.13424920450527805,
+        "recall": 0.7254366812227074,
+        "f1_score": 0.22656949239227722,
+        "specificity": 0.9979039138761855
+    }
+}

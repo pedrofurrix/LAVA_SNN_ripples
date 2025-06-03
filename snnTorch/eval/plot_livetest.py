@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
+import plotly.graph_objects as go
+from plotly.offline import plot as plotly_save
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir))
 
@@ -30,27 +32,29 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     
     if window is not None:
         start, end = window
-        # Adjust the data, spikes, gt, and outputspikes to the specified window
-        data = data[start:end]
-        spikes = spikes[start:end]
-
-        # Adjust ground truth events (gt): select events that overlap with the window
-        # gt[:, 0] = start of ripple, gt[:, 1] = end of ripple
-        # Keep ripples that overlap the window [start, end)
-        gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
-        # Shift the ripple times to be relative to the window
-        gt = gt
-        
-        # Adjust output spikes: keep those within [start, end)
-        outputspikes = outputspikes[(outputspikes >= start) & (outputspikes < end)]
-    else:
+    else: 
         start = 0
-        end = len(data)
+        end = len(data)   
+
+    # Adjust the data, spikes, gt, and outputspikes to the specified window
+    data = data[start:end]
+    spikes = spikes[start:end]
+
+    # Adjust ground truth events (gt): select events that overlap with the window
+    # gt[:, 0] = start of ripple, gt[:, 1] = end of ripple
+    # Keep ripples that overlap the window [start, end)
+    gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
+    # Shift the ripple times to be relative to the window
+    gt = gt
+    
+    # Adjust output spikes: keep those within [start, end)
+    outputspikes = outputspikes[(outputspikes >= start) & (outputspikes < end)]
+           
 
 
     # Convert to seconds
-    up_spike_times = np.where(spikes[:, 0] == 1)[0]
-    down_spike_times = np.where(spikes[:, 1] == 1)[0]
+    up_spike_times = np.where(spikes[:, 0] == 1)[0] + start
+    down_spike_times = np.where(spikes[:, 1] == 1)[0] + start
         # Use the same time base (in seconds)
     up_spike_times_sec = up_spike_times / 1000
     down_spike_times_sec = down_spike_times / 1000
@@ -66,11 +70,11 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     
     # Plot the Input Up and Down Spikes
     if input:
-        ax.vlines(up_spike_times_sec,0,3, color='green', alpha=0.5,label='Up Spikes')
-        ax.vlines(down_spike_times_sec,-3,0, color='red',alpha=0.5, label='Down Spikes')
-        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-4, color='purple', marker='o', label='Output Spikes')
+        ax.vlines(up_spike_times_sec,0.8,1, color='green', alpha=0.3,label='Up Spikes')
+        ax.vlines(down_spike_times_sec,-1,-0.8, color='red',alpha=0.3, label='Down Spikes')
+        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-2, color='purple', marker='o', label='Output Spikes')
     else:
-        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-3, color='purple', marker='o', label='Output Spikes')
+        ax.scatter(outputspikes_sec, np.ones_like(outputspikes_sec)*-2, color='purple', marker='o', label='Output Spikes')
 
     # Plot the Ground Truth Ripples
     for i,ripple in enumerate(gt_sec):
@@ -93,5 +97,130 @@ def plot_livetest(prefix,parent_dir,downsampled_fs,window=None, title='Live Test
     plt.show()
     return fig, ax
 
-plot_livetest(prefix="updnb4ds_100_8", parent_dir=parent_dir, downsampled_fs="30000_1000",
-               window=(8000000,8030000), title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=False)
+
+
+
+def plot_livetest_interactive(prefix, parent_dir, downsampled_fs, window=None, 
+                               title='Live Test Data', xlabel='Time (s)', ylabel='Value', 
+                               input=True, save_path=None):
+    # Load the data
+    data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(downsampled_fs))
+    spikes = np.load(os.path.join(data_dir, 'concat_spikes.npy'))
+    gt = np.load(os.path.join(data_dir, 'concat_ripples.npy'))
+    data = np.load(os.path.join(data_dir, 'concat_data.npy'))
+    outputspikes = np.load(os.path.join(os.path.dirname(__file__), "spikes", f'{prefix}_spikes_.npy'))
+
+    with open(os.path.join(os.path.dirname(__file__), f'{prefix}_results.json'), 'r') as f:
+        params = json.load(f)
+    max_detection_offset = params["max_detection_offset"] / 1000
+    refractory_period = params["refractory_period_gt"] / 1000
+    tolerance= params["tolerance"] / 1000
+    if window is not None:
+        start, end = window
+    else:
+        start = 0
+        end = len(data)
+
+    data = data[start:end]
+    spikes = spikes[start:end]
+    gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
+    outputspikes = outputspikes[(outputspikes >= start) & (outputspikes < end)]
+
+    # Time axis in seconds
+    time = np.arange(start, end) / 1000
+    up_spike_times_sec = (np.where(spikes[:, 0] == 1)[0]+start) / 1000
+    down_spike_times_sec = (np.where(spikes[:, 1] == 1)[0]+start) / 1000
+    gt_sec = gt / 1000
+    outputspikes_sec = outputspikes / 1000
+
+    # Create figure
+    fig = go.Figure()
+
+    # Original signal
+    fig.add_trace(go.Scatter(x=time, y=data, mode='lines', name='Original Data', line=dict(color='blue')))
+
+    # Input spikes
+    if input:
+        fig.add_trace(go.Scatter(x=up_spike_times_sec, y=[1.2]*len(up_spike_times_sec), mode='markers',
+                                 marker=dict(color='green',symbol="triangle-down",  size=4), name='Up Spikes'))
+        fig.add_trace(go.Scatter(x=down_spike_times_sec, y=[-1.2]*len(down_spike_times_sec), mode='markers',
+                                 marker=dict(color='red',symbol="triangle-up", size=4), name='Down Spikes'))
+
+    # Output spikes
+    y_val = -2
+    fig.add_trace(go.Scatter(x=outputspikes_sec, y=[y_val]*len(outputspikes_sec), mode='markers',
+                             marker=dict(color='purple', symbol='circle', size=6), name='Output Spikes'))
+
+    # Ground truth ripples
+    for i, ripple in enumerate(gt_sec):
+        fig.add_shape(type='rect',
+                      x0=ripple[0], x1=ripple[1], y0=-3, y1=3,
+                      line=dict(color='yellow'), fillcolor='yellow', opacity=0.2,
+                      name='Ground Truth Ripple')
+        if tolerance > 0:
+            fig.add_shape(type='rect',
+                        x0=ripple[0]-tolerance, x1=ripple[0], y0=-3, y1=3,
+                        line=dict(color='orange'), fillcolor='orange', opacity=0.1,
+                        name='Tolerance')
+
+    # Predicted ripples (from output spikes)
+    spike_before = -10000
+    for spike in outputspikes_sec:
+        if spike - refractory_period > spike_before:
+            fig.add_shape(type='rect',
+                          x0=spike - max_detection_offset, x1=spike,
+                          y0=-3, y1=3,
+                          line=dict(color='lightblue'), fillcolor='lightblue', opacity=0.2)
+            spike_before = spike
+        
+        # Add legend entry for Ground Truth Ripple (yellow)
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode='lines',
+        line=dict(color='yellow', width=10),
+        name='Ground Truth Ripple'
+    ))
+
+    # Add legend entry for Predicted Ripple (lightblue)
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode='lines',
+        line=dict(color='lightblue', width=10),
+        name='Predicted Ripple'
+    ))
+    if tolerance > 0:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode='lines',
+            line=dict(color='orange', width=10),
+            name='Tolerance'
+        ))
+
+    fig.update_layout(
+        title=title,
+        xaxis_title=xlabel,
+        yaxis_title=ylabel,
+        template="plotly_white",
+        showlegend=True,
+        autosize=True,
+        width=None,
+        height=None,
+    )
+
+    # Save HTML
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        import plotly.io as pio
+        pio.write_html(fig, file=save_path, auto_open=False,
+                       full_html=True, include_plotlyjs='cdn',
+                       config={"responsive": True})
+    return fig
+
+prefix= "updnb4ds_100_7"
+window=(000000,200000)
+# plot_livetest(prefix=prefix, parent_dir=parent_dir, downsampled_fs="30000_1000",
+#                window=window, title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
+
+
+save_path= os.path.join(os.path.dirname(__file__), "live_plots", f"{prefix}_live_test_plot.html")
+fig=plot_livetest_interactive(prefix="updnb4ds_100_10", parent_dir=parent_dir, downsampled_fs="30000_1000", window=window, 
+                               title='Live Test Data', xlabel='Time (s)', ylabel='Value', 
+                               input=True, save_path=save_path)
+# fig.show()

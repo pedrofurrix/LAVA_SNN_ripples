@@ -160,7 +160,7 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
 
 
 def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_size,sample_ratio, scaling_factor, 
-                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,fraction=1):
+                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,fraction=1,percentile=False):
 # Split the Input Data and Ground Truth into Windows
     windowed_input_data = []    # Input Data Windows
     windowed_gt = []        # Ground Truth Windows (spike time if HFO, -1 if no HFO)
@@ -198,7 +198,11 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
             filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
             if downsample_factor>1:
                 filtered_signal=decimation_downsampling(filtered_signal,downsample_factor)
-            thresholds.append(round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
+            if percentile:
+                threshold=threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio*100,scaling_factor)
+            else:
+                threshold=calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor)
+            thresholds.append(round(threshold,4))
             # thresholds.append(round(threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
             config[dataset]["thresholds"][channel]=thresholds[channel]  
             if thresholds[channel] > 0.1:

@@ -346,3 +346,47 @@ def decimation_downsampling(signal,factor):
     
     return downsampled_signal
 
+from scipy.spatial import distance
+from scipy.stats import entropy, chisquare
+from pyemd import emd
+
+def evaluate_histogram(hist1,hist2,config):
+    
+    h1 = hist1[0].astype(np.float64)
+    h2 = hist2[0].astype(np.float64)
+
+    epsilon = 1e-8
+    h1 += epsilon
+    h2 += epsilon
+    h1 /= np.sum(h1)
+    h2 /= np.sum(h2)
+
+    ### 1. Bhattacharyya Distance
+    bc = np.sum(np.sqrt(h1 * h2))  # Bhattacharyya coefficient
+    bhatta_dist = -np.log(bc + 1e-10)  # Avoid log(0)
+    print(f"Bhattacharyya Distance: {bhatta_dist:.4f}")
+    config['bhattacharyya'] = bhatta_dist
+
+    ### 2. KL Divergence
+    kl_div = entropy(h1, h2)
+    print(f"KL Divergence: {kl_div:.4f}")
+    config['kl_divergence'] = kl_div
+
+    ### 3. Earth Mover’s Distance (EMD)
+    # Distance matrix: 1D histogram → distances between bin positions
+    bin_ids = np.arange(len(h1)).astype(np.float64)
+    distance_matrix = np.abs(np.subtract.outer(bin_ids, bin_ids))
+    emd_value = emd(h1, h2, distance_matrix)
+    print(f"Earth Mover’s Distance: {emd_value:.4f}")
+    config['emd'] = emd_value
+
+    ### 4. Chi-Square Test
+    # Assumes hist1 is observed, hist2 is expected
+    chi_stat, chi_p = chisquare(h1* np.sum(h1), h2* np.sum(h2))
+    print(f"Chi-Square Statistic: {chi_stat:.4f}, p-value: {chi_p:.4f}")
+    config['chi_square_stat'] = chi_stat
+    config['chi_square_p'] = chi_p
+
+
+
+    return config

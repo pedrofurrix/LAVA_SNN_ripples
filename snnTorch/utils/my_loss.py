@@ -89,10 +89,11 @@ class SpikeTimePenalty(nn.Module):
         If the target is a negative spike time, it means that the neuron should not spike.
         In this case, we set the spike time to the last time step multiplied by the penalty factor.
         '''
-        targets[targets < 0] = (num_steps - 1) * self.fp_penalty_factor
+        mask_negatives = targets < 0
+        targets[mask_negatives] = (num_steps - 1) * self.fp_penalty_factor
         
-        mask = targets < 0
-        spk_time_final[mask & (spk_time_final >= num_steps - 1)] = (num_steps - 1) * self.fp_penalty_factor
+        
+        spk_time_final[mask_negatives & (spk_time_final >= num_steps - 1)] = (num_steps - 1) * self.fp_penalty_factor
         
         '''
         Check if any output neuron has GT != -1 near the end of the window ]num_steps-tolerance-1, num_steps-1]
@@ -331,9 +332,9 @@ class SpikeTimePenalty(nn.Module):
                 torch.ones_like(spk_time) * target
             )[tolerance_mask]
 
-            spk_time_clone[torch.abs(spk_time - target) < tolerance] = (
-                torch.ones_like(spk_time) * target
-            )[torch.abs(spk_time - target) < tolerance]
+            # spk_time_clone[torch.abs(spk_time - target) < tolerance] = (
+            #     torch.ones_like(spk_time) * target
+            # )[torch.abs(spk_time - target) < tolerance]
             return spk_time_clone
 
         @staticmethod
@@ -498,8 +499,9 @@ class mse_temporal_loss_penaltyfn_fp():
         multi_spike=False,
         reduction='mean',
         weight=None,
-        fp_penalty_factor=1.0,    # Penalty Factor for Extreme Cases
         fn_penalty_factor=1.0,  # Penalty Factor for False Negatives
+        fp_penalty_factor=1.0,    # Penalty Factor for False Positives
+        # Normalize the loss by the number of time steps
         normalize=True,
     ):
         super().__init__()
@@ -510,7 +512,7 @@ class mse_temporal_loss_penaltyfn_fp():
             'none' if self.weight is not None else self.reduction))
         
         self.spk_time_fn = SpikeTimePenalty(
-            target_is_time, on_target, off_target, tolerance, multi_spike, fn_penalty_factor,fp_penalty_factor
+            target_is_time, on_target, off_target, tolerance, multi_spike, fn_penalty_factor=fn_penalty_factor,fp_penalty_factor=fp_penalty_factor
         )
 
         self.__name__ = "mse_temporal_loss"
