@@ -265,7 +265,8 @@ class liset_paper():
         try:
             filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
             self.file_len = os.path.getsize(filename=filename)
-            self.file_samples = self.file_len / 8 / 2
+            num_channels_raw = 8 if channels is not self.second_shank_channels else 32
+            self.file_samples = self.file_len / num_channels_raw / 2
         except:
             if self.verbose:
                 print('.dat file not in path')
@@ -277,9 +278,9 @@ class liset_paper():
                 print("Cannot load specified channels (listed channel IDs inconsistent with total number of channels).")
             return False
         
-        start = self.start * 8 * 2
-        numSamples = self.numSamples * 8 * 2
-
+        start = self.start * num_channels_raw * 2
+        numSamples = self.numSamples * num_channels_raw * 2
+        
         if start > self.file_len:
             if self.verbose:
                 print(f'the start must be lower than the total file samples.\nTotal file samples: {self.file_samples}')
@@ -302,7 +303,7 @@ class liset_paper():
             else:
                 raw = f.read(self.file_len - start)
             data = np.frombuffer(raw, dtype=np.int16)
-            data = RAW2ORDERED(data, channels,num_channels_raw=8)
+            data = RAW2ORDERED(data, channels,num_channels_raw=num_channels_raw)
             return data
             
 
@@ -321,19 +322,23 @@ class liset_paper():
         """
 
         try:
-            info = loadmat(f'{data_path}/info.mat')
-        except:
             try:
-                info = loadmat(f'{data_path}/neurospark.mat')
+                info = loadmat(f'{data_path}/info.mat')
             except:
-                print('.mat file cannot be opened or is not in path.')
-                return
-            
+                info = loadmat(f'{data_path}/neurospark.mat')    
+        except:
+            print('.mat file cannot be opened or is not in path.')
+            info=None
+
+        self.second_shank_channels=[29, 17, 20, 32, 30, 18, 19, 31]
         try:
-            if "neurosparkmat" in info:
-                channels = info['neurosparkmat']['channels'][0][0][shank-1:shank]
-            else: 
-                channels=[i for i in range(8)]
+            if info is not None:
+                if "neurosparkmat" in info:
+                    channels = info['neurosparkmat']['channels'][0][0][shank-1:shank]
+                else: 
+                    channels=[i for i in range(8)]
+            else:
+                channels=self.second_shank_channels
         except Exception as err:
             print(f'No data available for shank {shank}\n\n{err}')
             return 

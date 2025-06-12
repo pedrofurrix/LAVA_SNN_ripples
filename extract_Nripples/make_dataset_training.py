@@ -311,6 +311,68 @@ def plot_dataset_testing(window,downsampled_fs="30000_1000",title='Live Test Dat
     plt.show()
     return fig, ax
 
+def channel_dataset_final(parent=parent,save=save,identifier="1000"):
+    config={}
+    ripples_concat=[]
+    spikified_concat=[]
+    filtered_concat=[]
+    total_length = 0
+    ### Load configuration
+    params_dir=os.path.join(os.path.dirname(__file__),"train_pedro","windowed_data")
+    with open(os.path.join(params_dir, "config.json"), 'r') as f:
+        parameters = json.load(f)
+        downsampled_fs = parameters["downsampled_fs"]
+        bandpass = parameters["bandpass"]
+        factor = parameters["factor"]
+        fraction = 1-parameters["fraction"]
+        refractory = parameters["refractory"]
+        print(f"Downsampled fs: {downsampled_fs}, Bandpass: {bandpass}, Factor: {factor}, Fraction: {fraction}, Refractory: {refractory}") 
+    
+    config=fill_config(config, parameters)
+    savepath=os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down",f"{identifier}")
+    for dataset in os.listdir(parent):
+        print(f"Processing dataset: {dataset}")
+        dataset_path = os.path.join(parent, dataset)
+        liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
+        liset=TrainData(liset,fraction,beginning=False)
+        downsample_factor=liset.fs//downsampled_fs
+        ripples=np.array(liset.ripples_GT)//downsample_factor
+        # Downsample ripples
+        ripples=ripples//factor
+
+        print("Dataset: ", dataset)
+        print("data shape: ", liset.data.shape)
+        print("ripples shape: ", ripples.shape)
+        filtered=np.zeros((liset.data.shape[0]//(factor*downsample_factor),liset.data.shape[1]))
+        spikified_dataset=np.zeros((liset.data.shape[0]//(factor*downsample_factor),liset.data.shape[1],2))
+        # print("Head of data_concat: ", data[:10][:])
+        # print("Head of ripples_concat: ", ripples[:10])
+        ripples = ripples[np.argsort(ripples[:, 0])]
+        thresholds=parameters[dataset]["thresholds"]
+        print("Thresholds: ", thresholds)
+        for channel in range(liset.data.shape[1]):
+            threshold=thresholds[str(channel)]
+            channel_signal = liset.data[:, channel]
+            filtered_liset=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+            if downsample_factor>1:
+                filtered_liset=decimation_downsampling(filtered_liset,downsample_factor)
+            spikified=up_down_channel(filtered_liset,threshold,downsampled_fs,refractory)
+            # spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
+            if factor>1:
+                downsampled,spikes_lost=extract_spikes_downsample(spikified,factor)
+                filtered_liset=decimation_downsampling(filtered_liset,factor)
+            else:
+                downsampled=spikified
+            # Fill the downsampled spikes and filtered data
+            filtered[:, channel] = filtered_liset
+            spikified_dataset[:, channel, :] = downsampled
+        if save:
+            save_dataset=os.path.join(savepath,dataset)
+            os.makedirs(save_dataset, exist_ok=True)
+            np.save(os.path.join(save_dataset, f"filtered_data.npy"), filtered)
+            np.save(os.path.join(save_dataset, f"spike_data.npy"), spikified_dataset)
+            np.save(os.path.join(save_dataset, f"ripples.npy"), ripples)
 
 # concat_dataset_final(parent=parent,save=True)
 # plot_dataset_testing(window=(0,10000),downsampled_fs="30000_1000",title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
+channel_dataset_final(parent=parent,save=save,identifier="30000_1000_100")

@@ -54,8 +54,15 @@ def load_ripple_times_paper(path):
             ripples = df[['ripIni', 'ripEnd']].to_numpy(dtype=int)
             return ripples
         else:
-            print("Error: Columns 'ripIni' and 'ripEnd' not found in CSV.")
-            return None
+            df = pd.read_csv(ripples_file_path, sep=',')
+            if {'ripIni', 'ripEnd'}.issubset(df.columns):
+                ripples = df[['ripIni', 'ripEnd']].to_numpy(dtype=int)
+                return ripples
+            else:
+                print(f"Columns 'ripIni' and 'ripEnd' not found in {ripples_file_path}.")
+                return None
+  
+            
     else:
         print(f"File {ripples_file_path} does not exist.")
         return None

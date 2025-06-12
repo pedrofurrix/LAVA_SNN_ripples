@@ -501,6 +501,7 @@ class mse_temporal_loss_penaltyfn_fp():
         weight=None,
         fn_penalty_factor=1.0,  # Penalty Factor for False Negatives
         fp_penalty_factor=1.0,    # Penalty Factor for False Positives
+        loss_multiplier_negatives=1.0,  # Multiplier for the loss of negative spikes
         # Normalize the loss by the number of time steps
         normalize=True,
     ):
@@ -517,6 +518,7 @@ class mse_temporal_loss_penaltyfn_fp():
 
         self.__name__ = "mse_temporal_loss"
         self.normalize = normalize
+        self.loss_multiplier_negatives=loss_multiplier_negatives
 
     def __call__(self, spk_rec, targets):
         '''
@@ -548,7 +550,13 @@ class mse_temporal_loss_penaltyfn_fp():
 
         if self.weight is not None:
             loss = loss * self.weight[targets]
-            if self.reduction == 'mean':
-                loss = loss.mean()
+
+        neg_mask = (targets == -1).float()
+        pos_mask = 1.0 - neg_mask
+        scale = pos_mask + neg_mask * self.loss_multiplier_negatives
+        loss = loss * scale
+        
+        if self.reduction == 'mean':
+            loss = loss.mean()
 
         return loss

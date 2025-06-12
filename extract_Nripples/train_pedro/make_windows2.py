@@ -176,6 +176,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     # Iterate over the datasets
     dataset_id = 0
     for dataset in os.listdir(parent):
+        print("Dataset:", dataset)
         dataset_path = os.path.join(parent, dataset)
         liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
         liset=TrainData(liset,fraction)
