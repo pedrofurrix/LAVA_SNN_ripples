@@ -21,11 +21,11 @@ from matplotlib.lines import Line2D
 
 #### LAB PC
 # parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\CNN_TRAINING_SESSIONS" # Modify this to your data path folder
-# parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
+parent = r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\Download_from_paper" # Modify this to your data path folder
 
 ### HOME PC
 # parent=r"E:\neurospark_mat\CNN_TRAINING_SESSIONS"
-parent=r"E:\neurospark_mat\Download_from_paper"
+# parent=r"E:\neurospark_mat\Download_from_paper"
 
 downsampled_fs= 4000
 save_dir = os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down")
@@ -260,7 +260,7 @@ def overlaps_with_any_ripple(candidate_start, candidate_end, ripples_GT):
 
 def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=save_dir,
                  time_max=time_max,window_size=window_size,sample_ratio=sample_ratio,scaling_factor=scaling_factor,
-                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,threshold=threshold):
+                 refractory=refractory,bandpass=bandpass,min_threshold=min_threshold,save=save,threshold=threshold,percentile=False):
     
     # Define saving directory
     print('Extracting UP/Down Spikes ...')
@@ -290,7 +290,11 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
                 if factor>1:
                     filtered_signal=decimation_downsampling(filtered_signal,factor)
                     # filtered_signal=average_downsampling(filtered_signal,factor)
-                thresholds[channel]=round(calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4)
+                if percentile:
+                    threshold=threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio*100,scaling_factor)
+                else:
+                    threshold=calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor)
+                thresholds[channel]=round(threshold,4)
             print("Thresholds:",thresholds)
         else:
             thresholds=np.ones(liset.data.shape[1])*threshold
@@ -319,7 +323,7 @@ def make_up_down_nochunks(parent=parent,downsampled_fs=downsampled_fs,save_dir=s
         if save:
             # Save the spikified data	
             os.makedirs(sub_save_dir, exist_ok=True)  # <-- creates directory if it doesn't exist
-            save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
+            save_data=os.path.join(sub_save_dir, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
             np.save(save_data, arr=spikified, allow_pickle=True)
             save_params(sub_save_dir,time_max,window_size,sample_ratio,scaling_factor,refractory,bandpass,thresholds,downsampled_fs,chunk_size)
             print(f'Saved UP-DOWN DataSet - {i}')
@@ -514,7 +518,7 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
             if spike_downsampled:
                 path=os.path.join(up_down_path, f"spikes_downsampled_{spike_downsampled}Hz.npy")
             else:
-                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
+                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
             up_down= np.load(path)
             if verbose:
                 print("Loaded UP/DN SPikes:", path)
@@ -683,11 +687,14 @@ def evaluate_encoding(spikified=None,filtered=None,save_dir=save_dir,bandpass=ba
 
 
 
-def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=[0],ripple=7,id=0):
+def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,
+                        bandpass=bandpass,downsampled_fs=downsampled_fs,parent=parent,save=save, channels=[0],ripple=7,id=0,highpass=100):
+    
     """
     Plot the reconstruction of the UP/DOWN spikes
 
     """
+
     both_counter=0
     ############## Load the data ##################
     dirs=os.listdir(parent)
@@ -722,25 +729,25 @@ def plot_reconstruction(spikified=None,filtered=None,save_dir=save_dir,bandpass=
         print(f'Shape of the filtered data: {filtered_liset.shape}')
         print(f'Shape of the UP/DN data: {up_down.shape}')
 
-        # Reconstruct the signal
-        reconstructed_signal=np.zeros((up_down.shape[0],len(channels)))
+    
+        reconstructed_signal=np.zeros((up_down.shape[0],up_down.shape[1]))    
         
-        for i,channel in enumerate(channels):
-            # reconstructed_signal[0,i]=filtered_liset[0,i]
-            reconstructed_signal[0, i] = 0
+
+        for channel in channels:
+            reconstructed_signal[0,channel]=filtered_liset[0,channel]
             # Loop through the up_down data and reconstruct the signal
             for t in range(1, up_down.shape[0]):
-                spike_plus = up_down[t, i,0]
-                spike_minus = up_down[t, i,1]
-                if spike_plus and spike_minus:
-                    both_counter+=1
+                spike_plus = up_down[t, channel,0]
+                spike_minus = up_down[t, channel,1]
                 if spike_plus == 1:
-                    reconstructed_signal[t, i] = reconstructed_signal[t - 1, i] + thresholds[channel]
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel] + thresholds[channel]
                 elif spike_minus == 1:
-                    reconstructed_signal[t, i] = reconstructed_signal[t - 1, i] - thresholds[channel]
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel] - thresholds[channel]
                 else:
-                    reconstructed_signal[t, i] = reconstructed_signal[t - 1, i]
-            print(both_counter)
+                    reconstructed_signal[t, channel] = reconstructed_signal[t - 1, channel]
+            if highpass:
+                reconstructed_signal[:, channel] = highpass_filter(reconstructed_signal[:, channel], fs=downsampled_fs, highpass=highpass)
+
         if not ripple:
             chunk_length=int(0.04*liset.fs)    
             max_start = liset.data.shape[0] - chunk_length
@@ -888,7 +895,7 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
             if downsampled_spikes:
                 path=os.path.join(up_down_path, f"spikes_downsampled_{downsampled_spikes}Hz.npy")
             else:
-                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
+                path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
             up_down= np.load(path)
 
             print("Loaded UP/DN SPikes:", path)
@@ -991,7 +998,7 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
         print("Loaded LFPs:",dataset_path)
 
         if spikified is None:
-            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}_SF.npy')
+            path=os.path.join(up_down_path, f'data_up_down_{bandpass[0]}_{bandpass[1]}.npy')
             up_down= np.load(path)
             print("Loaded UP/DN SPikes:", path)
         else:
@@ -1019,5 +1026,5 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
     print(f"Total spikes lost (all datasets): {total_lost} ({round(total_lost/total_spikes*100,2)}%) out of {total_spikes} total spikes")
     print(f"Total spikes Downsampled: {total_spikes-total_lost})")
     
-# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=30000,parent=parent,save=save,
-#                           channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False,highpass=5)
+# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save,
+#                           channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False,highpass=100)

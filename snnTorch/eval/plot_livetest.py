@@ -5,6 +5,7 @@ import json
 import plotly.graph_objects as go
 from plotly.offline import plot as plotly_save
 
+from collections import defaultdict
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir,os.pardir))
 
 
@@ -244,7 +245,8 @@ from plotly.subplots import make_subplots
 def plot_livetest_channels(prefix, parent_dir, identifier, window=None, 
                                title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=0,
                                input=True, save_path=None,seed=None,channels=[0]):
-    # Load the data
+    
+    ### Load the data ###
     data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(identifier))
     datasets=os.listdir(data_dir)
     spikes = np.load(os.path.join(data_dir,datasets[dataset], 'spike_data.npy'))
@@ -271,7 +273,8 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
         gt=np.array(ripples_window)-window_data[0]
     parameters=params["parameters"]
     max_detection_offset = parameters["max_detection_offset"] / 1000
-    refractory_period = parameters["refractory_period_gt"] / 1000
+    # refractory_period = parameters["refractory_period_gt"]/1000
+    refractory_period = 0
     tolerance= parameters["tolerance"] / 1000
     if window is not None:
         start, end = window
@@ -284,7 +287,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
     gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
     outputspikes = outputspikes[dataset*8:(dataset+1)*8,:]
     filtered_outputspikes_sec = []
-    
+    gt_sec = gt / 1000
     for ch_spikes in outputspikes:
         ch_valid = ch_spikes[(ch_spikes >= start) & (ch_spikes < end)]
         filtered_outputspikes_sec.append(ch_valid/1000)
@@ -292,7 +295,37 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
     # Time axis in seconds
     time = np.arange(start, end) / 1000
 
-    gt_sec = gt / 1000
+    # Classify output spikes into True Positives (TP) and False Positives (FP)
+    classified_spikes_by_channel = defaultdict(list)
+
+    for ch, spike_times in enumerate(filtered_outputspikes_sec):
+        used_gt = set()  # Reset for each channel
+        last_fp_time = -1e10
+        last_tp_time = -1e10
+
+        for spike in spike_times:
+            matched_gt = False
+
+            for gt_idx, (start_gt, end_gt) in enumerate(gt_sec):
+                if gt_idx in used_gt:
+                    continue  # Already matched for this channel
+
+                # Match spike within expected window before GT onset
+                if start_gt - tolerance <= spike <= start_gt - tolerance + max_detection_offset:
+                    if spike - last_tp_time >= refractory_period:
+                        classified_spikes_by_channel[ch].append(('TP', spike))
+                        used_gt.add(gt_idx)
+                        last_tp_time = spike
+                        matched_gt = True
+                        break
+
+            if not matched_gt:
+                # Make sure this unmatched spike is not inside *any* GT window
+                in_any_gt = any(start_gt - tolerance <= spike <= max(start_gt - tolerance + max_detection_offset,end_gt) for (start_gt, end_gt) in gt_sec)
+                if not in_any_gt and spike - last_fp_time >= max_detection_offset:
+                    classified_spikes_by_channel[ch].append(('FP', spike))
+                    last_fp_time = spike
+    
 
     # Create figure
     fig = make_subplots(rows=len(channels), cols=1, shared_xaxes=True,shared_yaxes=True,)
@@ -327,16 +360,19 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
                                 name='Output Spikes' if i == 0 else None, showlegend=(i == 0)),
                                 row=i+1, col=1)
 
-        # Predicted ripple rectangles for this channel
-        spike_before = -10000
-        for spike in ch_spikes_sec:
-            if spike - refractory_period > spike_before:
-                fig.add_shape(type='rect',
-                            x0=spike - max_detection_offset, x1=spike+tolerance,
-                            y0=-3, y1=3,
-                            line=dict(color='lightblue'), fillcolor='lightblue', opacity=0.2,
-                            row=i+1, col=1)
-                spike_before = spike
+        if ch in classified_spikes_by_channel:
+            for label, spike_time in classified_spikes_by_channel[ch]:
+                fig.add_shape(
+                    type='line',
+                    x0=spike_time, x1=spike_time,
+                    y0=-3, y1=3,
+                    line=dict(
+                        color='green' if label == 'TP' else 'red',
+                        width=2,
+                        dash='dash'
+                    ),
+                    row=i + 1, col=1
+                )
 
         # Set Y-axis range
         fig.update_yaxes(range=[-3.5, 3.5], row=i+1, col=1)
@@ -358,11 +394,26 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
         line=dict(color='yellow', width=10), name='Ground Truth Ripple'))
      
 
+    # fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines',
+    #     line=dict(color='lightblue', width=10), name='Predicted Ripple'))
+
+    # fig.add_trace(go.Scatter(
+    # x=[None], y=[None], mode='lines',
+    # line=dict(color='purple', width=3, dash='dash'),  # 'dash' for dashed lines
+    # name='Predicted Ripple'
+    # ))
+
+    # Add invisible traces just for legend
     fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines',
-        line=dict(color='lightblue', width=10), name='Predicted Ripple'))
+                            line=dict(color='green', width=2, dash="dash"),
+                            name='Predicted TP'))
 
     fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines',
-        line=dict(color='orange', width=10), name='Tolerance'))
+                            line=dict(color='red', width=2, dash='dash'),
+                            name='Predicted FP'))
+
+    fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines',
+        line=dict(color='orange', width=10,), name='Tolerance'))
 
 
      # TEST CHANNEL HEIGHT
@@ -388,9 +439,9 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
     if save_path:
         channels_str= "_".join(map(str, channels))
         if seed is not None:
-            file=f"{prefix}_live_test_plot_seed{seed}_channels_{channels_str}.html"
+            file=f"{prefix}_live_test_plot_seed{seed}_{datasets[dataset]}.html"
         else:
-            file=f"{prefix}_live_test_plot_channels_{channels_str}.html"
+            file=f"{prefix}_live_test_plot_channels_{datasets[dataset]}.html"
         file_path = os.path.join(save_path, file)
         os.makedirs(save_path, exist_ok=True)
         import plotly.io as pio
@@ -402,10 +453,10 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
 
 
 # prefix= "updnb4ds_100_7"
-prefix="dsb4updn_median_200_7f"
+prefix="dsb4updn_median_200_8b"
 
 
-window=(000000,50000)
+window=(000000,100000)
 # plot_livetest(prefix=prefix, parent_dir=parent_dir, downsampled_fs="30000_1000",
 #                window=window, title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
 identifier="1000_200_median"
