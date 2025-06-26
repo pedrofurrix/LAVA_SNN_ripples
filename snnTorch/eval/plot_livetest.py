@@ -244,11 +244,14 @@ from plotly.subplots import make_subplots
 
 def plot_livetest_channels(prefix, parent_dir, identifier, window=None, 
                                title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=0,
-                               input=True, save_path=None,seed=None,channels=[0]):
+                               input=True, save_path=None,seed=None,channels=[0],tolerance=None,padding=0):
     
     ### Load the data ###
     data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(identifier))
     datasets=os.listdir(data_dir)
+    if "config.json" in datasets:
+        datasets.remove("config.json")
+    
     spikes = np.load(os.path.join(data_dir,datasets[dataset], 'spike_data.npy'))
     gt = np.load(os.path.join(data_dir,datasets[dataset], 'ripples.npy'))
     data = np.load(os.path.join(data_dir,datasets[dataset], 'filtered_data.npy'))
@@ -275,7 +278,11 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
     max_detection_offset = parameters["max_detection_offset"] / 1000
     # refractory_period = parameters["refractory_period_gt"]/1000
     refractory_period = 0
-    tolerance= parameters["tolerance"] / 1000
+    if tolerance is None:
+        tolerance= parameters["tolerance"] / 1000
+    else:
+        tolerance = tolerance / 1000 # Convert to seconds
+    padding = padding / 1000  # Convert padding to seconds
     if window is not None:
         start, end = window
     else:
@@ -311,7 +318,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
                     continue  # Already matched for this channel
 
                 # Match spike within expected window before GT onset
-                if start_gt - tolerance <= spike <= start_gt - tolerance + max_detection_offset:
+                if start_gt - tolerance <= spike <= start_gt + max_detection_offset:
                     if spike - last_tp_time >= refractory_period:
                         classified_spikes_by_channel[ch].append(('TP', spike))
                         used_gt.add(gt_idx)
@@ -321,7 +328,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
 
             if not matched_gt:
                 # Make sure this unmatched spike is not inside *any* GT window
-                in_any_gt = any(start_gt - tolerance <= spike <= max(start_gt - tolerance + max_detection_offset,end_gt) for (start_gt, end_gt) in gt_sec)
+                in_any_gt = any(start_gt - tolerance <= spike <= max(start_gt - tolerance + max_detection_offset,end_gt) + padding for (start_gt, end_gt) in gt_sec)
                 if not in_any_gt and spike - last_fp_time >= max_detection_offset:
                     classified_spikes_by_channel[ch].append(('FP', spike))
                     last_fp_time = spike
@@ -451,15 +458,21 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
         print(f"Plot saved to {file_path}")
     return fig
 
+adapt=20
 
 # prefix= "updnb4ds_100_7"
-prefix="dsb4updn_median_200_8b"
+prefix=f"dsb4updn_median_200_15f_adapt{adapt}" if adapt>0 else "dsb4updn_median_200_15f"
+padding=100
+tolerance=20
 
 
-window=(000000,100000)
+# window=(100000,200000)
+window=(0, 450000)  
 # plot_livetest(prefix=prefix, parent_dir=parent_dir, downsampled_fs="30000_1000",
 #                window=window, title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
-identifier="1000_200_median"
+
+# identifier="1000_200_median"
+identifier=f"30000_1000_100_adaptable{adapt}" if adapt>0 else "30000_1000_100"
 
 save_path= os.path.join(os.path.dirname(__file__), "live_plots")
 # fig=plot_livetest_interactive(prefix=prefix, parent_dir=parent_dir, downsampled_fs="30000_1000", window=window, 
@@ -471,7 +484,9 @@ fig=plot_livetest_channels(prefix=prefix,
                            parent_dir=parent_dir,
                            identifier=identifier, 
                            window=window, 
-                           dataset=3,
-                           channels=[0,1,2,3,4,5,6,7],
-                           save_path=save_path,
+                           dataset=0,
+                           channels=[0,3,6,],
+                           save_path=save_path, 
+                           padding=padding,
+                           tolerance=tolerance,
                            input=True)

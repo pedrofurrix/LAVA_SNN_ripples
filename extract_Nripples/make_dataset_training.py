@@ -311,7 +311,7 @@ def plot_dataset_testing(window,downsampled_fs="30000_1000",title='Live Test Dat
     plt.show()
     return fig, ax
 
-def channel_dataset_final(parent=parent,save=save,identifier="1000"):
+def channel_dataset_final(parent=parent,save=save,identifier="1000",fraction=None):
     config={}
     ripples_concat=[]
     spikified_concat=[]
@@ -324,7 +324,14 @@ def channel_dataset_final(parent=parent,save=save,identifier="1000"):
         downsampled_fs = parameters["downsampled_fs"]
         bandpass = parameters["bandpass"]
         factor = parameters["factor"]
-        fraction = 1-parameters["fraction"]
+        if fraction is None:
+            fraction= parameters["fraction"]
+            beginning = 1-fraction[1] # would be 0.8
+            end= 1-fraction[0] # would be 1 
+        else:
+            beginning = fraction[0]
+            end = fraction[1]
+
         refractory = parameters["refractory"]
         print(f"Downsampled fs: {downsampled_fs}, Bandpass: {bandpass}, Factor: {factor}, Fraction: {fraction}, Refractory: {refractory}") 
     
@@ -334,7 +341,7 @@ def channel_dataset_final(parent=parent,save=save,identifier="1000"):
         print(f"Processing dataset: {dataset}")
         dataset_path = os.path.join(parent, dataset)
         liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
-        liset=TrainData(liset,fraction,beginning=False)
+        liset=TrainData(liset,beginning,end)
         downsample_factor=liset.fs//downsampled_fs
         ripples=np.array(liset.ripples_GT)//downsample_factor
         # Downsample ripples
@@ -372,7 +379,96 @@ def channel_dataset_final(parent=parent,save=save,identifier="1000"):
             np.save(os.path.join(save_dataset, f"filtered_data.npy"), filtered)
             np.save(os.path.join(save_dataset, f"spike_data.npy"), spikified_dataset)
             np.save(os.path.join(save_dataset, f"ripples.npy"), ripples)
+    if save:
+        with open(os.path.join(savepath, "config.json"), 'w') as f:
+            json.dump(config, f, indent=4)
+        print(f"Data saved in {savepath}")
 
 # concat_dataset_final(parent=parent,save=True)
 # plot_dataset_testing(window=(0,10000),downsampled_fs="30000_1000",title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
-channel_dataset_final(parent=parent,save=save,identifier="30000_1000_100")
+# channel_dataset_final(parent=parent,save=save,identifier="30000_1000_100_60_80",fraction=(0.6,0.8))
+
+
+
+def channel_dataset_post_adaptable(parent=parent,save=save,identifier="1000",fraction=None):
+    config={}
+    ripples_concat=[]
+    spikified_concat=[]
+    filtered_concat=[]
+    total_length = 0
+    ### Load configuration
+    things_dir=os.path.join(os.path.dirname(__file__),"train_pedro","windowed_data")
+    with open(os.path.join(things_dir, "config.json"), 'r') as f:
+        parameters = json.load(f)
+        downsampled_fs = parameters["downsampled_fs"]
+        bandpass = parameters["bandpass"]
+        factor = parameters["factor"]
+        if fraction is None:
+            fraction= parameters["fraction"]
+            beginning = 1-fraction[1] # would be 0.8
+            end= 1-fraction[0] # would be 1 
+        else:
+            beginning = fraction[0]
+            end = fraction[1]
+
+        refractory = parameters["refractory"]
+        print(f"Downsampled fs: {downsampled_fs}, Bandpass: {bandpass}, Factor: {factor}, Fraction: {fraction}, Refractory: {refractory}") 
+    
+    config=fill_config(config, parameters)
+    config["adapt_threshold"] = parameters["adapt_threshold"]
+    config["overlap"]=parameters["overlap"]
+   
+    
+    savepath=os.path.join(os.path.dirname(__file__),"train_pedro","dataset_up_down",f"{identifier}")
+    for dataset in os.listdir(parent):
+        config[dataset]={}
+        config[dataset]["thresholds"] = {}
+        print(f"Processing dataset: {dataset}")
+        dataset_path = os.path.join(things_dir, dataset)
+        spikified=np.load(os.path.join(dataset_path,f"spikified.npy"))
+        filtered=np.load(os.path.join(dataset_path,f"filtered.npy"))
+        ripples=np.load(os.path.join(dataset_path,f"ripples.npy"))
+        print("Spikified shape: ", spikified.shape)
+        print("Filtered shape: ", filtered.shape)
+        print("Ripples shape: ", ripples.shape)
+
+        for channel in range(spikified.shape[1]):
+            if config["adapt_threshold"]:
+                thresholds=parameters[dataset]["thresholds"][str(channel)]
+                thresh_start=int(beginning * len(thresholds))
+                thresh_end=int(end * len(thresholds))
+                fraction_thresholds=thresholds[thresh_start:thresh_end]
+            else:
+                fraction_thresholds = parameters[dataset]["thresholds"][str(channel)]
+            config[dataset]["thresholds"][str(channel)]=fraction_thresholds
+            # print("Thresholds: ", fraction_thresholds)
+   
+
+        start= int(beginning * spikified.shape[0])
+        finish= int(end * spikified.shape[0])
+
+        spikified_fraction=spikified[start:finish,:,:]
+        ripples = ripples[np.argsort(ripples[:, 0])]
+        filtered_fraction=filtered[start:finish,:]
+        ripples_fraction=[]
+        for ripple in ripples:
+            ripple_start, ripple_end = ripple
+            if ripple_start <= int(finish) and ripple_end >= int(start):
+                adjusted_start = max(0, ripple_start - start)
+                adjusted_end = min(finish - start, ripple_end - start)
+                ripples_fraction.append([adjusted_start, adjusted_end])  
+        ripples_fraction = np.array(ripples_fraction) 
+        print(f"Dataset: {dataset}, Spikified shape: {spikified_fraction.shape}, Ripples shape: {ripples_fraction.shape}, Filtered shape: {filtered_fraction.shape}")     
+        if save:
+            save_dataset=os.path.join(savepath,dataset)
+            os.makedirs(save_dataset, exist_ok=True)
+            np.save(os.path.join(save_dataset, f"filtered_data.npy"), filtered_fraction)
+            np.save(os.path.join(save_dataset, f"spike_data.npy"), spikified_fraction)
+            np.save(os.path.join(save_dataset, f"ripples.npy"), ripples_fraction)
+    if save:
+        with open(os.path.join(savepath, "config.json"), 'w') as f:
+            json.dump(config, f, indent=4)
+        print(f"Data saved in {savepath}")
+
+
+channel_dataset_post_adaptable(parent=parent,save=save,identifier="30000_1000_100_adaptable20",fraction=(0.8,1.0))

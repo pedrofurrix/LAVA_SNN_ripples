@@ -34,14 +34,17 @@ def ripple_stats(parent_path):
     
 
 # Based on https://github.com/kburel/snn-hfo-detection/blob/main/snn_hfo_detection/functions/signal_to_spike/utility.py#L43
-def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_factor,plot=False):
-    times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
-
+def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_factor,plot=False,verbose=False):
+    times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds 
     min_time = np.min(times)
+   
     if np.min(times) < 0:
         raise ValueError(
             f'Tried to find thresholds for a dataset with a negative time: {min_time}')
     duration = np.max(times) - min_time
+    if verbose:
+        print(f"Duration of the signal: {duration} seconds, between {np.min(times)} and {np.max(times)}")
+        
     if duration <= 0:
         raise ValueError(
             f'Tried to find thresholds for a dataset with a duration that under or equal to zero. Got duration: {duration}')
@@ -62,6 +65,8 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
         )
 
     num_timesteps = int(np.ceil(duration / window_size))
+    if verbose:
+        print(f"Number of time steps: {num_timesteps} for window size {window_size} seconds")
     max_min_amplitude = np.zeros((num_timesteps, 2))
     for interval_nr, interval_start in enumerate(np.arange(start=0, stop=duration, step=window_size)):
         interval_end = interval_start + window_size
@@ -70,16 +75,21 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
         min_amplitude = np.min(signal[index])
         max_min_amplitude[interval_nr, 0] = max_amplitude
         max_min_amplitude[interval_nr, 1] = min_amplitude
-
+   
     chosen_samples = max(int(np.round(num_timesteps * sample_ratio)), 1)
+    if verbose:
+        print(f"Chosen samples for threshold calculation: {chosen_samples}")
     threshold_up = np.mean(np.sort(max_min_amplitude[:, 0])[:chosen_samples])
     threshold_dn = np.mean(
         np.sort(max_min_amplitude[:, 1] * -1)[:chosen_samples])
+    if verbose:
+        print(f"Threshold up: {threshold_up}, Threshold down: {threshold_dn}")
+        print(f"Final Threshold: {scaling_factor * (threshold_up + threshold_dn)}")
     if plot:
         plot_threshold_hist(max_min_amplitude[:,0],max_min_amplitude[:,1],threshold_up*scaling_factor,bins=20)
     return scaling_factor*(threshold_up + threshold_dn)
 
-def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_factor,plot=False):
+def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_factor,plot=False,verbose=False):
     times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...
 
     min_time = np.min(times)
@@ -87,6 +97,8 @@ def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_fa
         raise ValueError(
             f'Tried to find thresholds for a dataset with a negative time: {min_time}')
     duration = np.max(times) - min_time
+    if verbose:
+        print(f"Duration of the signal: {duration} seconds, between {np.min(times)} and {np.max(times)}")
     if duration <= 0:
         raise ValueError(
             f'Tried to find thresholds for a dataset with a duration that under or equal to zero. Got duration: {duration}')
@@ -105,6 +117,9 @@ def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_fa
     max_amplitudes = np.zeros((num_timesteps))
     min_amplitudes = np.zeros((num_timesteps))
 
+    if verbose:
+        print(f"Number of time steps: {num_timesteps} for window size {window_size} seconds")
+
     for interval_nr, interval_start in enumerate(np.arange(start=0, stop=duration, step=window_size)):
         interval_end = interval_start + window_size
         index = np.where((times >= interval_start) & (times <= interval_end))
@@ -115,6 +130,9 @@ def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_fa
 
     threshold_percentile = np.percentile(max_amplitudes, percentile)
     threshold=threshold_percentile*scaling_factor
+    if verbose:
+        print(f"Threshold for percentile {percentile}:  {threshold_percentile}")
+        print(f"Final Threshold: {threshold}")
     if plot:
         plot_threshold_hist(max_amplitudes,min_amplitudes,threshold,bins=20)
     return threshold
@@ -141,12 +159,15 @@ def plot_threshold_hist(max_amplitudes,min_amplitudes,threshold,bins=20):
     plt.tight_layout()
     plt.show()
 
-def up_down_channel(signal,threshold,downsampled_fs,refractory=0):
+def up_down_channel(signal,threshold,downsampled_fs,refractory=0,initial_value=None,return_value=False):
     # Define parameters
     # print("Threshold=",threshold)
     num_timesteps = len(signal)
     spikified = np.zeros((num_timesteps, 2 ))
-    value=signal[0]
+    if initial_value is not None:	
+        value = initial_value
+    else:
+        value=signal[0]
     refractory_samples = int(refractory*downsampled_fs)
     
     if refractory_samples == 0:
@@ -168,8 +189,10 @@ def up_down_channel(signal,threshold,downsampled_fs,refractory=0):
             # print(delta)
         else:
             i += 1  # no spike, move to next time step
-
-    return spikified
+    if return_value:
+        return spikified, value
+    else:
+        return spikified
 
 def up_down_channel_SF(signal,threshold,downsampled_fs,refractory=0):
     # Define parameters

@@ -937,7 +937,7 @@ def plot_reconstruction_whole(spikified=None,filtered=None,save_dir=save_dir,ban
     
     if len(channels) == 1:
         axes = [axes]  # ensure axes is always a list   
-    window=np.array(window)//overall_factor
+    window=np.array(window)*downsampled_fs
     filtered=filtered_liset[window[0]:window[1],:]
     up_down_ripple=up_down[window[0]:window[1],:,:]
     print("Filtered shape:",filtered.shape)
@@ -1026,5 +1026,5 @@ def downsample_spikes(spikified=None,original_freq=30000,target_freq=1000,parent
     print(f"Total spikes lost (all datasets): {total_lost} ({round(total_lost/total_spikes*100,2)}%) out of {total_spikes} total spikes")
     print(f"Total spikes Downsampled: {total_spikes-total_lost})")
     
-# plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=1000,parent=parent,save=save,
-#                           channels=[0],window=[0,1000000],id=0,spikes=True,downsampled_spikes=False,highpass=100)
+plot_reconstruction_whole(save_dir=save_dir,bandpass=bandpass,downsampled_fs=30000,parent=parent,save=save,
+                          channels=[1],window=[880,950],id=1,spikes=False,downsampled_spikes=False,highpass=100)

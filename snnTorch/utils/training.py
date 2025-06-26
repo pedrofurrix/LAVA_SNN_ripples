@@ -31,7 +31,7 @@ def test_printer(
     print("\n")
 
 
-def undersample_majority(input_data, gt, c1_mask = None) -> tuple[np.ndarray, np.ndarray]:
+def undersample_majority(input_data, gt, c1_mask = None,multiplier=1) -> tuple[np.ndarray, np.ndarray]:
     '''
     Class Balancing Technique: Under-sample the majority class
     Only implemented for binary classification (2-classes: 0 and 1)
@@ -57,22 +57,30 @@ def undersample_majority(input_data, gt, c1_mask = None) -> tuple[np.ndarray, np
         non_ripple_indices = np.where(c1_mask == 0)[0]
         ripple_indices = np.where(c1_mask == 1)[0]
 
-    # Get the minimum commmon number of samples
-    num_samples = min(len(non_ripple_indices), len(ripple_indices))   # Number of samples to keep from each class
+    # Identify majority/minority classes
+    if len(non_ripple_indices) > len(ripple_indices):
+        majority_indices, minority_indices = non_ripple_indices, ripple_indices
+    else:
+        majority_indices, minority_indices = ripple_indices, non_ripple_indices
 
-    # Randomly sort the indices of the two classes
-    np.random.shuffle(non_ripple_indices)
-    np.random.shuffle(ripple_indices)
+    # Calculate number of samples to keep
+    num_minority = len(minority_indices)
+    num_majority_to_keep = int(min(len(majority_indices), multiplier * num_minority))
 
-    # Get the balanced indices
-    balanced_indices = np.concatenate((non_ripple_indices[:num_samples],ripple_indices[:num_samples]))
+    # Shuffle and slice
+    np.random.shuffle(majority_indices)
+    np.random.shuffle(minority_indices)
 
-    # Sort the indices
-    balanced_indices = np.sort(balanced_indices)
+    selected_majority = majority_indices[:num_majority_to_keep]
+    selected_minority = minority_indices[:num_minority]
 
-    # Get the balanced data
+    # Combine and sort
+    balanced_indices = np.sort(np.concatenate((selected_majority, selected_minority)))
+
+    # Retrieve data
     balanced_input_data = input_data[balanced_indices]
     balanced_gt = gt[balanced_indices]
+
 
     # Return the balanced data
     return balanced_input_data, balanced_gt

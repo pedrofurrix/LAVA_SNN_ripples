@@ -1,5 +1,9 @@
 import os
 import numpy as np
+import sys
+curr_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(curr_dir, '..', '..'))
+sys.path.append(os.path.join(curr_dir, '..', '..',"liset_tk"))
 # from liset_tk import liset_tk
 from liset_paper import liset_paper as liset_tk
 from signal_aid import most_active_channel, bandpass_filter
@@ -27,7 +31,7 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
         dataset_path = os.path.join(parent, dataset)
         liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
         downsample_factor=liset.fs//downsampled_fs
-        liset=TrainData(liset,fraction)
+        liset=TrainData(liset,fraction[0],fraction[1])
 
         ripples=np.array(liset.ripples_GT)//downsample_factor
         spikified=np.zeros((liset.data.shape[0]//downsample_factor, liset.data.shape[1], 2))
@@ -160,7 +164,8 @@ def make_windows(parent,config,time_max,downsampled_fs,bandpass,window_size,samp
 
 
 def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_size,sample_ratio, scaling_factor, 
-                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,fraction=1,percentile=False):
+                     refractory,WINDOW_SHIFT, WINDOW_SIZE,MEAN_DETECTION_OFFSET,MAX_DETECTION_OFFSET,factor,
+                     fraction=1,percentile=False,adapt_threshold=False,overlap=0,min_spikes=0):
 # Split the Input Data and Ground Truth into Windows
     windowed_input_data = []    # Input Data Windows
     windowed_gt = []        # Ground Truth Windows (spike time if HFO, -1 if no HFO)
@@ -172,137 +177,183 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     total_hfos=0
     # curr_ripple_times = ripples_concat[curr_ripple_id]    # Get the GT times for the current sEEG source
     would_be_non_ripple=0
+    
     # LOAD THE DATA
     # Iterate over the datasets
     dataset_id = 0
+    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "windowed_data")    
     for dataset in os.listdir(parent):
         print("Dataset:", dataset)
         dataset_path = os.path.join(parent, dataset)
         liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
-        liset=TrainData(liset,fraction)
+        liset=TrainData(liset,0,1)
         downsample_factor=liset.fs//downsampled_fs
-        ripples=np.array(liset.ripples_GT)//downsample_factor
-        spikified=np.zeros((liset.data.shape[0]//downsample_factor, liset.data.shape[1], 2))
-        thresholds = []
-        downsampled=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1], 2))
 
+        ripples=np.array(liset.ripples_GT)//(downsample_factor*factor)
+        spikified=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1], 2))
+        filtered=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1]))
         print("data shape: ", liset.data.shape)
         print("ripples shape: ", ripples.shape)
-        # print("Head of data_concat: ", data[:10][:])
-        # print("Head of ripples_concat: ", ripples[:10])
         ripples = ripples[np.argsort(ripples[:, 0])]
-        # print(ripples[:10][:])
         config[dataset] = {}
         config[dataset]["thresholds"] = {}
+
         for channel in range(liset.data.shape[1]):
-            channel_signal = liset.data[:time_max*liset.fs, channel]
-            filtered_signal=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-            if downsample_factor>1:
-                filtered_signal=decimation_downsampling(filtered_signal,downsample_factor)
-            if percentile:
-                threshold=threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio*100,scaling_factor)
+            initial_value=None
+            channel_signal = liset.data[:, channel]
+            filtered_channel = bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+            if downsample_factor > 1:
+                filtered_channel = decimation_downsampling(filtered_channel, downsample_factor)
+            filtered_liset=decimation_downsampling(filtered_channel, factor)
+            filtered[:, channel] = filtered_liset
+            if adapt_threshold:
+                thresholds = []
+                step = int(downsampled_fs * overlap)
+                win = int(downsampled_fs * time_max)
+                total_len = len(filtered_channel)
+                for time in range(0,total_len,step):
+                    if time<win:
+                        threshold_window = filtered_channel[:win]
+                    else:
+                        threshold_window = filtered_channel[time-win:time]
+                    right_edge = min(time + step, total_len)
+                    current_window = filtered_channel[time:right_edge]
+                    # Compute threshold
+                    if percentile:
+                        threshold = threshold_percentile(threshold_window, downsampled_fs, window_size, sample_ratio * 100, scaling_factor)
+                    else:
+                        threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
+                    # Spikify
+                    spikified_window,initial_value = up_down_channel(current_window, threshold, downsampled_fs, refractory,initial_value=initial_value,return_value=True)
+                        
+                    if factor > 1:
+                        downsampled_window, _ = extract_spikes_downsample(spikified_window, factor)
+                    else:
+                        downsampled_window = spikified_window
+                    # Append the current window
+                    left=time//factor
+                    right=(right_edge)//factor
+                    spikified[left:right, channel, :] = downsampled_window
+                    thresholds.append(round(threshold,4))
+                config[dataset]["thresholds"][channel] = thresholds
             else:
-                threshold=calculate_threshold(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor)
-            thresholds.append(round(threshold,4))
-            # thresholds.append(round(threshold_percentile(filtered_signal,downsampled_fs,window_size,sample_ratio,scaling_factor),4))
-            config[dataset]["thresholds"][channel]=thresholds[channel]  
-            if thresholds[channel] > 0.1:
-                channel_signal = liset.data[:, channel]
-                curr_ripple_id = 0     # Keep track of the current GT event index since it is monotonically increasing the timestep
-                filtered_liset=bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
-                if downsample_factor>1:
-                    filtered_liset=decimation_downsampling(filtered_liset,downsample_factor)
-                    # filtered_liset=average_downsampling(filtered_liset,downsample_factor)
-                spikified[:, channel, :]=up_down_channel(filtered_liset,thresholds[channel],downsampled_fs,refractory)
-                # spikified[:, channel, :]=up_down_channel_SF(filtered_liset,thresholds[channel],downsampled_fs,refractory)
-                if factor>1:
-                    downsampled[:,channel,:],spikes_lost=extract_spikes_downsample(spikified[:,channel,:],factor)
+                threshold_window = filtered_channel[:int(downsampled_fs * time_max)]
+                if percentile:
+                    threshold = threshold_percentile(threshold_window, downsampled_fs, window_size, sample_ratio * 100, scaling_factor)
                 else:
-                    downsampled[:,channel,:]=spikified[:,channel,:]
-                
-                for i in range(0, spikified.shape[0], WINDOW_SHIFT*factor):
-                    left, right = i, i+WINDOW_SIZE*factor
-                    # Get the current input window
-                    curr_window = spikified[left:right, channel, :]
-                    downsampled_window= downsampled[left//factor:right//factor, channel, :]
-                    filtered_window = filtered_liset[left:right]
-                    
-                    # Increment the total windows count
-                    total_windows_count += 1
-                    # Check if the current window is smaller than the expected size
-                    if downsampled_window.shape[0] < WINDOW_SIZE:
-                        # If the current window is smaller than the expected size, break the loop
-                        print(f"[WARNING] Current window [{left}, {right}] is smaller than the expected size. Breaking the loop...")
-                        break
+                    threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
+                 # Spikify
+                spikified_window = up_down_channel(filtered_channel, threshold, downsampled_fs, refractory,initial_value=None,return_value=False)
+                if factor > 1:
+                    downsampled_window, _ = extract_spikes_downsample(spikified_window, factor)
+                else:
+                    downsampled_window = spikified_window      
+                spikified[:,channel,:]= downsampled_window
+                config[dataset]["thresholds"][channel] = round(threshold, 4)
+       
+        # EXTRACT WINDOWS
+        beginning_step=int(fraction[0]*spikified.shape[0])
+        end_step=int(fraction[1]*spikified.shape[0])
 
-                    # OPTIMIZATION STEP: Skip windows with no activations - The gradient will be zero 
-                    if np.sum(downsampled_window) == 0:
-                        # print(f"Window [{left}:{right}] has no Input activations. Skipping...")
-                        cur_gt_time=[-1, -1]    # Default value for Spike Time (no HFO)
-                        if curr_ripple_id < ripples.shape[0]:
-                            cur_gt_time = ripples[curr_ripple_id]  
-                        if (cur_gt_time[1] >= left) and (cur_gt_time[0] <= right):
-                            if cur_gt_time[1] <= right:
-                                print(f"[WARNING] Window [{left}:{right}] has a GT event at {cur_gt_time} and NO Input activations. Skipping...")
-                                # Update the curr_gt_idx to the next GT event
-                                skipped_hfo_count += 1
-                            # curr_ripple_id += 1
-                        continue   
-                    
-                    '''
-                    Check if there is a GT event in the current window
-                    '''
+        ripples_in_fraction=[]
+        for ripple in ripples:
+            ripple_start, ripple_end = ripple
+            if ripple_start <= int(end_step) and ripple_end >= int(beginning_step):
+                adjusted_start = max(0, ripple_start - beginning_step)
+                adjusted_end = min(end_step - beginning_step, ripple_end - beginning_step)
+                ripples_in_fraction.append([adjusted_start, adjusted_end])
+        ripples_in_fraction = np.array(ripples_in_fraction, dtype=np.int32)  
 
-                    curr_gt = -1    # Default value for Spike Time (no HFO)
-                    curr_ripple=-1
-                    # Check if the current GT event is within the current window
-                    while curr_ripple_id<ripples.shape[0]-1 and ripples[curr_ripple_id][1] < left:
-                        # Ripple ends before the window starts → skip it
-                        curr_ripple_id += 1
-                    
-                    if curr_ripple_id >= ripples.shape[0]:
-                        curr_ripple_id=ripples.shape[0]-1
-                
-                    cur_gt_time = ripples[curr_ripple_id]      
+        print("Ripples in Fraction: ", ripples_in_fraction.shape)
+        for channel in range(liset.data.shape[1]):
+            curr_ripple_id = 0
+            spikified_channel = spikified[beginning_step:end_step, channel, :]
+            filtered_liset= bandpass_filter(liset.data[(beginning_step*factor*downsample_factor):(end_step*factor*downsample_factor), channel], bandpass=bandpass, fs=liset.fs)
+            filtered_liset= decimation_downsampling(filtered_liset, downsample_factor*factor)
+            for i in range(0, spikified_channel.shape[0], WINDOW_SHIFT):
+                left, right = i, i+WINDOW_SIZE
+                # Get the current input window
+                spikified_window = spikified_channel[left:right, :]
+                filtered_window = filtered_liset[left:right]
+            
+                # Increment the total windows count
+                total_windows_count += 1
+                # Check if the current window is smaller than the expected size
+                if filtered_window.shape[0] < WINDOW_SIZE or spikified_window.shape[0] < WINDOW_SIZE:
+                    # If the current window is smaller than the expected size, break the loop
+                    print(f"[WARNING] Current window [{left}, {right}] is smaller than the expected size. Breaking the loop...")
+                    break
+
+                # OPTIMIZATION STEP: Skip windows with no activations - The gradient will be zero 
+                if np.sum(spikified_window) < min_spikes:
+                    # print(f"Window [{left}:{right}] has no Input activations. Skipping...")
+                    cur_gt_time=[-1, -1]    # Default value for Spike Time (no HFO)
+                    if curr_ripple_id < ripples_in_fraction.shape[0]:
+                        cur_gt_time =  ripples_in_fraction[curr_ripple_id]  
                     if (cur_gt_time[1] >= left) and (cur_gt_time[0] <= right):
+                        if cur_gt_time[1] <= right:
+                            print(f"[WARNING] Window [{left}:{right}] has a GT event at {cur_gt_time} and only {np.sum(spikified_window)} input activations. Skipping...")
+                            # Update the curr_gt_idx to the next GT event
+                            skipped_hfo_count += 1
+                        # curr_ripple_id += 1
+                    continue   
+                
+                '''
+                Check if there is a GT event in the current window
+                '''
+
+                curr_gt = -1    # Default value for Spike Time (no HFO)
+                curr_ripple=-1
+                # Check if the current GT event is within the current window
+                while curr_ripple_id< ripples_in_fraction.shape[0]-1 and  ripples_in_fraction[curr_ripple_id][1] < left:
+                    # Ripple ends before the window starts → skip it
+                    curr_ripple_id += 1
+                
+                if curr_ripple_id >=  ripples_in_fraction.shape[0]:
+                    curr_ripple_id= ripples_in_fraction.shape[0]-1
+            
+                cur_gt_time =  ripples_in_fraction[curr_ripple_id]      
+                if (cur_gt_time[1] >= left) and (cur_gt_time[0] <= right):
+                    '''
+                        Check if the current window overlaps with the current GT event
+                        The Network may spike in the interval [GT_time[0], GT_time[0] + MEAN_HFO_DURATION + PRED_GT_TOLERANCE]
+                        However, we are using an upper limit for the HFO Duration of WINDOW_SIZE.
+                        This way, the Ground Truth Timestamps will be clamped uppwards by WINDOW_SIZE - MAX_HFO_DURATION + MEAN_HFO_DURATION
+                    '''
+                    if cur_gt_time[0]<left:
+                        #TODO: Check if the GT event starts before the window starts 
+                        # THIS IS DEBUGGING
+                        print(f"[WARNING] GT event {cur_gt_time} starts before the window [{left}:{right}]. Skipping...")
+                        would_be_non_ripple+=1
+                        continue
+                    if  cur_gt_time[0] + MAX_DETECTION_OFFSET<=right: # If the GT event is completely within the current window
+                        '''The Network should predict the HFO -> Calculate the spike time
+                        Let's assume the network should spike at the end of the relevant event. We have no way of knowing
+                        the exact end time, so we use the mean duration of the event to calculate the spike time.
                         '''
-                            Check if the current window overlaps with the current GT event
-                            The Network may spike in the interval [GT_time[0], GT_time[0] + MEAN_HFO_DURATION + PRED_GT_TOLERANCE]
-                            However, we are using an upper limit for the HFO Duration of WINDOW_SIZE.
-                            This way, the Ground Truth Timestamps will be clamped uppwards by WINDOW_SIZE - MAX_HFO_DURATION + MEAN_HFO_DURATION
-                        '''
-                        if cur_gt_time[0]<left:
-                            #TODO: Check if the GT event starts before the window starts 
-                            # THIS IS DEBUGGING
-                            print(f"[WARNING] GT event {cur_gt_time} starts before the window [{left}:{right}]. Skipping...")
-                            would_be_non_ripple+=1
-                            continue
-                        if  cur_gt_time[0] + MAX_DETECTION_OFFSET*factor<=right: # If the GT event is completely within the current window
-                            '''The Network should predict the HFO -> Calculate the spike time
-                            Let's assume the network should spike at the end of the relevant event. We have no way of knowing
-                            the exact end time, so we use the mean duration of the event to calculate the spike time.
-                            '''
-                            avg_spike_time = cur_gt_time[0] +  MEAN_DETECTION_OFFSET*factor # The network should spike at the end of the relevant event
-                            
-                            # Subtract the left offset to get the spike time in the current window
-                            relative_spike_time = avg_spike_time - left
+                        avg_spike_time = cur_gt_time[0] +  MEAN_DETECTION_OFFSET # The network should spike at the end of the relevant event
+                        
+                        # Subtract the left offset to get the spike time in the current window
+                        relative_spike_time = avg_spike_time - left
 
-                            relative_spike_time//=factor
-                            curr_gt = int(relative_spike_time)   # Update the curr_gt value
-
-                            curr_ripple=curr_ripple_id+dataset_id
-
-                    # Append the current window    
-                    ripple_ids.append(curr_ripple)
-                    windowed_input_data.append(downsampled_window)            
-                    # Append the current GT Spike Time to the windowed GT
-                    windowed_gt.append(curr_gt)
-                    filtered_windows.append(filtered_window)
-                total_hfos+=ripples.shape[0]
-            else:
-                print(f"[WARNING] Channel {channel} has a very low threshold. Skipping...")
-        print("Thresholds: ", thresholds)
-        dataset_id+=liset.ripples_GT.shape[0]
+                        # relative_spike_time//=factor
+                        curr_gt = int(relative_spike_time)   # Update the curr_gt value
+                        
+                        curr_ripple=curr_ripple_id+dataset_id
+                # Append the current window    
+                ripple_ids.append(curr_ripple)
+                windowed_input_data.append(spikified_window)            
+                # Append the current GT Spike Time to the windowed GT
+                windowed_gt.append(curr_gt)
+                filtered_windows.append(filtered_window)
+            total_hfos+=ripples_in_fraction.shape[0]
+        dataset_id+= ripples_in_fraction.shape[0]
+        # Save Spikified Data
+        save_dataset=os.path.join(save_dir, dataset)
+        os.makedirs(save_dataset, exist_ok=True)
+        np.save(os.path.join(save_dataset, "spikified.npy"), spikified)
+        np.save(os.path.join(save_dataset, "filtered.npy"), filtered)
+        np.save(os.path.join(save_dataset, "ripples.npy"), ripples)
         
     # Convert to numpy array
     ripple_ids=np.array(ripple_ids,dtype=np.int32)
@@ -310,7 +361,8 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     windowed_input_data = np.array(windowed_input_data)
     windowed_gt = np.array(windowed_gt, dtype=np.float32)
     removed_windows = total_windows_count - windowed_input_data.shape[0]
-
+    config["adapt_threshold"] = adapt_threshold
+    config["overlap"] = overlap
     print(f"Removed {removed_windows}/{total_windows_count} ({round((removed_windows / total_windows_count)*100, 2)}%) windows with no input activations")
     print(f"Skipped {skipped_hfo_count} HFOs due to no input activations")
     print(f"Total HFOs (theoretical): {total_hfos}")
@@ -481,28 +533,23 @@ def min_max_spike_threshold_prob(windows, gt, ripple_ids, MEAN_DETECTION_OFFSET,
 
 
 class TrainData:
-    def __init__(self, liset,fraction,beginning=True):
-        
-        self.fs=liset.fs
-        self.get_data(liset,fraction,beginning)
-        
-    
-    def get_data(self,liset,fraction,beginning):
+    def __init__(self, liset, beginning_fraction=0, end_fraction=1.0):
+        self.fs = liset.fs
+        self.get_data(liset, beginning_fraction, end_fraction)
 
-        if beginning:
-            self.id_train=int(liset.data.shape[0]*fraction)
-            self.data=liset.data[:self.id_train,:]
-              # Keep only ripples that start within the training data range
-            self.ripples_GT = liset.ripples_GT[
-                (liset.ripples_GT[:, 0] < self.id_train)
-            ]
-        else:
-            self.id_train=int(liset.data.shape[0] * (1 - fraction))
-            self.data = liset.data[self.id_train:, :]
-            # Ripples that start after id_train
-            mask = liset.ripples_GT[:, 1] >= self.id_train
-            filtered_ripples = liset.ripples_GT[mask]
-            # Shift indices to match new data segment
-            self.ripples_GT = filtered_ripples - self.id_train
+    def get_data(self, liset, beginning_fraction, end_fraction):
+        total_len = liset.data.shape[0]
+        start_idx = int(total_len * beginning_fraction)
+        end_idx = int(total_len * end_fraction)
 
+        self.data = liset.data[start_idx:end_idx, :]
+
+        # Filter ripples that start within the selected range
+        ripple_start = liset.ripples_GT[:, 0]
+        ripple_end = liset.ripples_GT[:, 1]
+        mask = (ripple_start < end_idx) & (ripple_end >= start_idx)
+
+        # Keep and adjust ripple indices relative to the new segment
+        filtered_ripples = liset.ripples_GT[mask]
+        self.ripples_GT = filtered_ripples - start_idx
       

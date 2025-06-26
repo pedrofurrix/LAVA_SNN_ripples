@@ -1,0 +1,21 @@
+{
+    "bandpass": [
+        100,
+        250
+    ],
+    "downsampled_fs": 30000,
+    "factor": 30,
+    "time_max": 120,
+    "window_size": 0.1,
+    "sample_ratio": 0.25,
+    "scaling_factor": 1,
+    "refractory": 0.0003,
+    "percentile": false,
+    "fraction": [
+        0,
+        1
+    ],
+    "downsample_factor": 1,
+    "overlap": 60,
+    "adaptive_thresholds": true
+}
