@@ -265,7 +265,7 @@ class liset_paper():
         try:
             filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
             self.file_len = os.path.getsize(filename=filename)
-            num_channels_raw = 8 if channels is not self.second_shank_channels else 32
+            num_channels_raw = 8 if channels is not self.second_shank_channels else 43
             self.file_samples = self.file_len / num_channels_raw / 2
         except:
             if self.verbose:

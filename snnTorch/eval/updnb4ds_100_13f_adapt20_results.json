@@ -1,0 +1,358 @@
+{
+    "Amigo2_2019-07-11_11-57-07": {
+        "channel_0": {
+            "TP": 141,
+            "FP": 170,
+            "FN": 83,
+            "TN": 479461,
+            "Precision": 0.4534,
+            "Recall": 0.6295,
+            "F1": 0.5271
+        },
+        "channel_1": {
+            "TP": 140,
+            "FP": 159,
+            "FN": 84,
+            "TN": 479473,
+            "Precision": 0.4682,
+            "Recall": 0.625,
+            "F1": 0.5354
+        },
+        "channel_2": {
+            "TP": 117,
+            "FP": 85,
+            "FN": 107,
+            "TN": 479570,
+            "Precision": 0.5792,
+            "Recall": 0.5223,
+            "F1": 0.5493
+        },
+        "channel_3": {
+            "TP": 111,
+            "FP": 92,
+            "FN": 113,
+            "TN": 479569,
+            "Precision": 0.5468,
+            "Recall": 0.4955,
+            "F1": 0.5199
+        },
+        "channel_4": {
+            "TP": 81,
+            "FP": 63,
+            "FN": 143,
+            "TN": 479628,
+            "Precision": 0.5625,
+            "Recall": 0.3616,
+            "F1": 0.4402
+        },
+        "channel_5": {
+            "TP": 79,
+            "FP": 55,
+            "FN": 145,
+            "TN": 479638,
+            "Precision": 0.5896,
+            "Recall": 0.3527,
+            "F1": 0.4413
+        },
+        "channel_6": {
+            "TP": 57,
+            "FP": 43,
+            "FN": 167,
+            "TN": 479672,
+            "Precision": 0.57,
+            "Recall": 0.2545,
+            "F1": 0.3519
+        },
+        "channel_7": {
+            "TP": 45,
+            "FP": 63,
+            "FN": 179,
+            "TN": 479664,
+            "Precision": 0.4167,
+            "Recall": 0.2009,
+            "F1": 0.2711
+        },
+        "summary": {
+            "TP": 771,
+            "FP": 730,
+            "FN": 1021,
+            "TN": 3836675,
+            "Precision": 0.5137,
+            "Recall": 0.4302,
+            "F1": 0.4683
+        }
+    },
+    "Dlx1_2021-02-12_12-46-54": {
+        "channel_0": {
+            "TP": 15,
+            "FP": 13,
+            "FN": 16,
+            "TN": 204240,
+            "Precision": 0.5357,
+            "Recall": 0.4839,
+            "F1": 0.5085
+        },
+        "channel_1": {
+            "TP": 22,
+            "FP": 24,
+            "FN": 9,
+            "TN": 204222,
+            "Precision": 0.4783,
+            "Recall": 0.7097,
+            "F1": 0.5714
+        },
+        "channel_2": {
+            "TP": 22,
+            "FP": 17,
+            "FN": 9,
+            "TN": 204229,
+            "Precision": 0.5641,
+            "Recall": 0.7097,
+            "F1": 0.6286
+        },
+        "channel_3": {
+            "TP": 22,
+            "FP": 15,
+            "FN": 9,
+            "TN": 204231,
+            "Precision": 0.5946,
+            "Recall": 0.7097,
+            "F1": 0.6471
+        },
+        "channel_4": {
+            "TP": 21,
+            "FP": 18,
+            "FN": 10,
+            "TN": 204229,
+            "Precision": 0.5385,
+            "Recall": 0.6774,
+            "F1": 0.6
+        },
+        "channel_5": {
+            "TP": 16,
+            "FP": 11,
+            "FN": 15,
+            "TN": 204241,
+            "Precision": 0.5926,
+            "Recall": 0.5161,
+            "F1": 0.5517
+        },
+        "channel_6": {
+            "TP": 16,
+            "FP": 10,
+            "FN": 15,
+            "TN": 204242,
+            "Precision": 0.6154,
+            "Recall": 0.5161,
+            "F1": 0.5614
+        },
+        "channel_7": {
+            "TP": 9,
+            "FP": 7,
+            "FN": 22,
+            "TN": 204252,
+            "Precision": 0.5625,
+            "Recall": 0.2903,
+            "F1": 0.383
+        },
+        "summary": {
+            "TP": 143,
+            "FP": 115,
+            "FN": 105,
+            "TN": 1633886,
+            "Precision": 0.5543,
+            "Recall": 0.5766,
+            "F1": 0.5652
+        }
+    },
+    "Som2_2019-07-24_12-01-49": {
+        "channel_0": {
+            "TP": 35,
+            "FP": 11,
+            "FN": 29,
+            "TN": 207205,
+            "Precision": 0.7609,
+            "Recall": 0.5469,
+            "F1": 0.6364
+        },
+        "channel_1": {
+            "TP": 38,
+            "FP": 21,
+            "FN": 26,
+            "TN": 207192,
+            "Precision": 0.6441,
+            "Recall": 0.5938,
+            "F1": 0.6179
+        },
+        "channel_2": {
+            "TP": 39,
+            "FP": 13,
+            "FN": 25,
+            "TN": 207199,
+            "Precision": 0.75,
+            "Recall": 0.6094,
+            "F1": 0.6724
+        },
+        "channel_3": {
+            "TP": 41,
+            "FP": 22,
+            "FN": 23,
+            "TN": 207188,
+            "Precision": 0.6508,
+            "Recall": 0.6406,
+            "F1": 0.6457
+        },
+        "channel_4": {
+            "TP": 44,
+            "FP": 14,
+            "FN": 20,
+            "TN": 207193,
+            "Precision": 0.7586,
+            "Recall": 0.6875,
+            "F1": 0.7213
+        },
+        "channel_5": {
+            "TP": 32,
+            "FP": 15,
+            "FN": 32,
+            "TN": 207204,
+            "Precision": 0.6809,
+            "Recall": 0.5,
+            "F1": 0.5766
+        },
+        "channel_6": {
+            "TP": 31,
+            "FP": 19,
+            "FN": 33,
+            "TN": 207201,
+            "Precision": 0.62,
+            "Recall": 0.4844,
+            "F1": 0.5439
+        },
+        "channel_7": {
+            "TP": 24,
+            "FP": 13,
+            "FN": 40,
+            "TN": 207214,
+            "Precision": 0.6486,
+            "Recall": 0.375,
+            "F1": 0.4752
+        },
+        "summary": {
+            "TP": 284,
+            "FP": 128,
+            "FN": 228,
+            "TN": 1657596,
+            "Precision": 0.6893,
+            "Recall": 0.5547,
+            "F1": 0.6147
+        }
+    },
+    "Thy7_2020-11-11_16-05-00": {
+        "channel_0": {
+            "TP": 72,
+            "FP": 22,
+            "FN": 67,
+            "TN": 148748,
+            "Precision": 0.766,
+            "Recall": 0.518,
+            "F1": 0.618
+        },
+        "channel_1": {
+            "TP": 71,
+            "FP": 19,
+            "FN": 68,
+            "TN": 148752,
+            "Precision": 0.7889,
+            "Recall": 0.5108,
+            "F1": 0.6201
+        },
+        "channel_2": {
+            "TP": 73,
+            "FP": 16,
+            "FN": 66,
+            "TN": 148753,
+            "Precision": 0.8202,
+            "Recall": 0.5252,
+            "F1": 0.6404
+        },
+        "channel_3": {
+            "TP": 59,
+            "FP": 11,
+            "FN": 80,
+            "TN": 148772,
+            "Precision": 0.8429,
+            "Recall": 0.4245,
+            "F1": 0.5646
+        },
+        "channel_4": {
+            "TP": 47,
+            "FP": 5,
+            "FN": 92,
+            "TN": 148790,
+            "Precision": 0.9038,
+            "Recall": 0.3381,
+            "F1": 0.4921
+        },
+        "channel_5": {
+            "TP": 29,
+            "FP": 2,
+            "FN": 110,
+            "TN": 148811,
+            "Precision": 0.9355,
+            "Recall": 0.2086,
+            "F1": 0.3412
+        },
+        "channel_6": {
+            "TP": 32,
+            "FP": 7,
+            "FN": 107,
+            "TN": 148803,
+            "Precision": 0.8205,
+            "Recall": 0.2302,
+            "F1": 0.3596
+        },
+        "channel_7": {
+            "TP": 17,
+            "FP": 4,
+            "FN": 122,
+            "TN": 148821,
+            "Precision": 0.8095,
+            "Recall": 0.1223,
+            "F1": 0.2125
+        },
+        "summary": {
+            "TP": 400,
+            "FP": 86,
+            "FN": 712,
+            "TN": 1190250,
+            "Precision": 0.823,
+            "Recall": 0.3597,
+            "F1": 0.5006
+        }
+    },
+    "overall": {
+        "TP": 1598,
+        "FP": 1059,
+        "FN": 2066,
+        "TN": 8318407,
+        "Precision": 0.6014,
+        "Recall": 0.4361,
+        "F1": 0.5056
+    },
+    "parameters": {
+        "ripple_detection_offset": [
+            18,
+            45,
+            31,
+            20
+        ],
+        "pred_causality_window": 5,
+        "max_detection_offset": 81,
+        "refractory_period_gt": 200,
+        "tolerance": 0,
+        "seed": null,
+        "time_duration": null,
+        "testing_dataset": "30000_1000_100_adaptable20"
+    }
+}

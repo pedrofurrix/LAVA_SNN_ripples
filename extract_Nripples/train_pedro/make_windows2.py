@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import sys
-curr_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(curr_dir, '..', '..'))
-sys.path.append(os.path.join(curr_dir, '..', '..',"liset_tk"))
+dir= os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(dir, '..', '..'))
+sys.path.append(os.path.join(dir, '..', '..',"liset_tk"))
 # from liset_tk import liset_tk
 from liset_paper import liset_paper as liset_tk
 from signal_aid import most_active_channel, bandpass_filter

@@ -415,7 +415,8 @@ def channel_dataset_post_adaptable(parent=parent,save=save,identifier="1000",fra
         print(f"Downsampled fs: {downsampled_fs}, Bandpass: {bandpass}, Factor: {factor}, Fraction: {fraction}, Refractory: {refractory}") 
     
     config=fill_config(config, parameters)
-    config["adapt_threshold"] = parameters["adapt_threshold"]
+    # config["adapt_threshold"] = parameters["adapt_threshold"]
+    config["adapt_threshold"]=False
     config["overlap"]=parameters["overlap"]
    
     
@@ -470,5 +471,5 @@ def channel_dataset_post_adaptable(parent=parent,save=save,identifier="1000",fra
             json.dump(config, f, indent=4)
         print(f"Data saved in {savepath}")
 
-
-channel_dataset_post_adaptable(parent=parent,save=save,identifier="30000_1000_100_adaptable20",fraction=(0.8,1.0))
+# parent= r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\extra_liset"
+channel_dataset_post_adaptable(parent=parent,save=save,identifier="testing_dsb4_adaptable2",fraction=(0.8,1.0))

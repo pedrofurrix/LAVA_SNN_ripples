@@ -1,7 +1,8 @@
 import numpy as np
 from enum import Enum
 from typing import Callable
-
+import random
+import torch
 def train_printer(
         epoch, iter_counter,
         loss_val, test_loss_val,
@@ -232,3 +233,13 @@ def oversample_minority(
     # Return the balanced data
     return balanced_input_data, balanced_gt
 
+# --- Set seeds for reproducibility ---
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # Ensures deterministic behavior (optional, but slows things down)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

@@ -285,6 +285,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
     padding = padding / 1000  # Convert padding to seconds
     if window is not None:
         start, end = window
+        end=min(end,data.shape[0])
     else:
         start = 0
         end = len(data)
@@ -467,7 +468,7 @@ tolerance=20
 
 
 # window=(100000,200000)
-window=(0, 450000)  
+window=(0, 500000)  
 # plot_livetest(prefix=prefix, parent_dir=parent_dir, downsampled_fs="30000_1000",
 #                window=window, title='Live Test Data', xlabel='Time (s)', ylabel='Value',input=True)
 
@@ -484,7 +485,7 @@ fig=plot_livetest_channels(prefix=prefix,
                            parent_dir=parent_dir,
                            identifier=identifier, 
                            window=window, 
-                           dataset=0,
+                           dataset=3,
                            channels=[0,3,6,],
                            save_path=save_path, 
                            padding=padding,
