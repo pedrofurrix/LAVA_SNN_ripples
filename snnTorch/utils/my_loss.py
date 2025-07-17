@@ -560,3 +560,94 @@ class mse_temporal_loss_penaltyfn_fp():
             loss = loss.mean()
 
         return loss
+    
+
+def my_first_spike_acc(output, target, tolerance=0, verbose=False):
+    '''
+    Accuracy Metric to calculate the accuracy of the first spike prediction
+    ---------
+    Parameters:
+    output : torch.Tensor shape=(num_steps, batch_size, num_classes)
+        Spikes of the output neurons.
+    target : torch.Tensor shape=(batch_size, num_classes)
+        Ground truth of the network - First spike time of each output neuron
+    tolerance : int
+        Tolerance for the accuracy calculation. If the output neuron spikes within this tolerance, it is considered correct.
+    verbose : bool
+        Whether to print the output or not
+    ---------
+
+    Returns:
+    float | np.nan
+        The accuracy of the first spike prediction. If no valid predictions are found, return np.nan
+    '''
+    # Ensure the output and target are on the same device
+    output = output.to(target.device)
+
+    num_steps = output.shape[0]
+
+    # --- Calculate the accuracy ---
+    # Find the first spike time of each output neuron
+    # Shape: (batch_size, num_classes)
+    output_first_spike_time = torch.zeros(target.shape, device=target.device)    # Initialize with -1 (No Spike)
+    for class_idx in range(target.shape[1]):
+        output_first_spike_time[:, class_idx] = torch.argmax(output[:, :, class_idx], dim=0)
+    
+    # Check if the output neuron spikes at all -> If not, set the first spike time to -1
+    output_first_spike_time[torch.sum(output, dim=0) == 0] = -1
+    if verbose:
+        print(f"Output First Spike Time: {output_first_spike_time} | Target: {target}")
+
+    # NOTE: If the GT Spike time is almost at the end of the window, the accuracy is not calculated correctly.
+    '''
+    Check if any output neuron has GT = 1 near the end of the window ]num_steps-tolerance-1, num_steps-1]
+    and observed spikes = 0. If so, the prediction should not be considered into the accuracy calculation,
+    '''
+    # Check if any output neuron has GT = 1 near the end of the window
+    targets_near_end_mask = (
+        ((num_steps - 1 - tolerance) < target) & (target < num_steps) 
+    )
+    
+    # define mask for output neurons that did not spike (equal to -1)
+    spiked_mask = (output_first_spike_time != -1)
+    positive_target_mask = (target != -1)    
+    valid_mask = (spiked_mask | (positive_target_mask & ~targets_near_end_mask))
+    # Define mask combining the two masks
+    # invalid_mask = targets_near_end_mask & spk_time_no_spike_mask
+    # if verbose:
+    #     print(f"Targets Near End Mask: {targets_near_end_mask}")
+    #     print(f"Spk Time No Spike Mask: {spk_time_no_spike_mask}")
+    #     print(f"Invalid Mask: {invalid_mask}")
+    
+    '''
+    If GT is near the end and the neuron did not spike, the prediction should not be considered into the
+    accuracy calculation, since the window after the GT is < tolerance window Set the GT to -1 as well in those cases
+    '''
+    
+    # Update the output first spike time and target to exclude the invalid predictions
+
+    output_first_spike_time = output_first_spike_time[valid_mask]
+    target = target[valid_mask]
+
+    # --- Calculate the spike time differences ---
+    # Before that, transform the -1 values to the end of the window
+    output_first_spike_time[output_first_spike_time == -1] = num_steps - 1
+    target[target == -1] = num_steps - 1
+
+    # accuracy = SF.accuracy_temporal(output, target)
+    spikeDiffs = torch.abs(output_first_spike_time - target)
+    if verbose:
+        print(f"Spike Diffs: {spikeDiffs}")
+
+    # Check if the spike time differences are within the tolerance window
+    # Shape: (batch_size, num_classes)
+    spikeDiffsWithinTolerance = spikeDiffs < tolerance
+    
+    # Calculate the accuracy
+    # Shape: ()
+    accuracy = torch.mean(spikeDiffsWithinTolerance.float())
+
+    if verbose:
+        print(f"Accuracy Value: {accuracy*100}%\n====================\n")
+    
+    return accuracy

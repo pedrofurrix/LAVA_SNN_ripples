@@ -371,7 +371,7 @@ def decimation_downsampling(signal,factor):
 
 from scipy.spatial import distance
 from scipy.stats import entropy, chisquare
-from pyemd import emd
+# from pyemd import emd
 
 def evaluate_histogram(hist1,hist2,config):
     
