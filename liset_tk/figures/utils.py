@@ -67,3 +67,22 @@ def plot_ripple_durations(liset):
     plt.grid(True)
     plt.show()
 
+
+def plot_ripples_per_second(liset):
+    ripples = liset.ripples_GT
+    fs = liset.fs
+    start_times_sec = ripples[:, 0] / fs  # Convert ripple start samples to seconds
+    
+    # Optional: round down to the nearest second to bucket them
+    rounded_starts = np.floor(start_times_sec).astype(int)
+
+    plt.figure(figsize=(15, 2), facecolor="#e6f7ff")
+    for t in rounded_starts:
+        plt.axvline(x=t, color='yellow', linewidth=0.5)
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("Ripple Event")
+    plt.title("Vertical Lines for Ripple Start Times")
+    plt.xlim(0, np.ceil(liset.data.shape[0] / fs))  # Adjust x-axis to dataset duration
+    plt.tight_layout()
+    plt.show()
