@@ -177,6 +177,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     total_hfos=0
     # curr_ripple_times = ripples_concat[curr_ripple_id]    # Get the GT times for the current sEEG source
     would_be_non_ripple=0
+    hfo_too_late=0
     
     # LOAD THE DATA
     # Iterate over the datasets
@@ -326,7 +327,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                         print(f"[WARNING] GT event {cur_gt_time} starts before the window [{left}:{right}]. Skipping...")
                         would_be_non_ripple+=1
                         continue
-                    if  cur_gt_time[0] + MAX_DETECTION_OFFSET<=right: # If the GT event is completely within the current window
+                    if cur_gt_time[0] + MAX_DETECTION_OFFSET<=right: # If the GT event is completely within the current window
                         '''The Network should predict the HFO -> Calculate the spike time
                         Let's assume the network should spike at the end of the relevant event. We have no way of knowing
                         the exact end time, so we use the mean duration of the event to calculate the spike time.
@@ -340,6 +341,9 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
                         curr_gt = int(relative_spike_time)   # Update the curr_gt value
                         
                         curr_ripple=curr_ripple_id+dataset_id
+                    else: # Added now - if it does not work remove later
+                        hfo_too_late+=1
+                        continue    
                 # Append the current window    
                 ripple_ids.append(curr_ripple)
                 windowed_input_data.append(spikified_window)            
@@ -370,6 +374,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     print("Windowed GT Shape: ", windowed_gt.shape)
     print("Filtered Windows Shape: ", filtered_windows.shape)
     print("TOTAL WINDOWS SKIPPED DUE TO RIPPLE STARTING BEFORE WINDOW: ", would_be_non_ripple)
+    print("TOTAL HFOs SKIPPED DUE TO HFO STARTING TOO LATE: ", hfo_too_late)
     return  windowed_input_data, windowed_gt, filtered_windows, ripple_ids, config
 
 

@@ -67,10 +67,6 @@ def compute_channel_wise_kappa_with_fp(info, num_channels=8):
             gt_vector.append(1)
             pred_vector.append(1 if ch in ripple_hits[ripple_id] else 0)
 
-        for ripple_id in sorted(undetected_ripples):
-            gt_vector.append(1)
-            pred_vector.append(0)  # missed detection
-
         # Negative samples
         fp_spikes = fp_spikes_by_channel.get(ch, [])
         for i in range(n_neg):
@@ -109,7 +105,7 @@ def process_all_networks_with_kappa(metrics_dict_by_network, num_channels=8):
 
 
 # --- LOAD THE .pkl FILE GENERATED PREVIOUSLY ---
-adapt=2
+adapt=120
 test_ds_b4=False
 if test_ds_b4:
     identifier=f"testing_dsb4_adaptable{adapt}" if adapt > 0 else "testing_dsb4"
