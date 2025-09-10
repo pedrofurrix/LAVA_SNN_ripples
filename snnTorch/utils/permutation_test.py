@@ -141,6 +141,52 @@ def permutation_test_accurate_targets(test_loader,first_spike_times,detection_wi
     p_value = np.mean([s >= actual_score for s in null_distribution])
     return actual_score, null_distribution, p_value
 
+def permutation_test_accurate_targets_no_pred(test_loader,detection_window, N=1000):
+   
+    all_targets = []
+    for _, targets in test_loader:
+        all_targets.append(targets)
+    all_targets = torch.cat(all_targets, dim=0)
+
+
+    # # Compute actual score (same as before)
+    # TP, FP, FN = 0, 0, 0
+    # for i, gt_time in enumerate(all_targets):
+    #     first_spike = first_spike_times[i].item()
+        
+    #     if gt_time == -1:
+    #         if first_spike != -1:
+    #             FP += 1
+    #     else:
+    #         detected = first_spike != -1 and (gt_time - detection_window[0] <= first_spike <= gt_time + detection_window[1])
+    #         if detected:
+    #             TP += 1
+    #         else:
+    #             FN += 1
+    # actual_score = 2 * TP / (2 * TP + FP + FN)
+
+    null_distribution = []
+    for _ in range(N):
+        permuted_targets = all_targets[torch.randperm(len(all_targets))]
+        TP, FP, FN = 0, 0, 0
+        for i, gt_time in enumerate(permuted_targets):
+            first_spike = all_targets[i].item()
+            if gt_time == -1:
+                if first_spike != -1:
+                    FP += 1
+            else:
+                detected = first_spike != -1 and (gt_time - detection_window[0] <= first_spike <= gt_time + detection_window[1])
+                if detected:
+                    TP += 1
+                else:
+                    FN += 1
+        perm_score = 2 * TP / (2 * TP + FP + FN)
+        null_distribution.append(perm_score)
+
+    # p_value = np.mean([s >= actual_score for s in null_distribution])
+    return null_distribution
+
+
 import random
 
 

@@ -244,7 +244,7 @@ from plotly.subplots import make_subplots
 
 def plot_livetest_channels(prefix, parent_dir, identifier, window=None, 
                                title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=0,
-                               input=True, save_path=None,seed=None,channels=[0],tolerance=None,padding=0):
+                               input=True, save_path=None,seed=None,channels=[0],tolerance=None,jitter=100,padding=0,max_detection_offset=80):
     
     ### Load the data ###
     data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(identifier))
@@ -275,7 +275,8 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
                 ripples_window.append(ripple)
         gt=np.array(ripples_window)-window_data[0]
     parameters=params["parameters"]
-    max_detection_offset = parameters["max_detection_offset"] / 1000
+    # max_detection_offset = parameters["max_detection_offset"] / 1000
+    max_detection_offset/=1000  # Convert to seconds
     # refractory_period = parameters["refractory_period_gt"]/1000
     refractory_period = 0
     if tolerance is None:
@@ -319,7 +320,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
                     continue  # Already matched for this channel
 
                 # Match spike within expected window before GT onset
-                if start_gt - tolerance <= spike <= start_gt + max_detection_offset:
+                if start_gt - tolerance <= spike <= start_gt + max_detection_offset + tolerance:
                     if spike - last_tp_time >= refractory_period:
                         classified_spikes_by_channel[ch].append(('TP', spike))
                         used_gt.add(gt_idx)
@@ -330,7 +331,7 @@ def plot_livetest_channels(prefix, parent_dir, identifier, window=None,
             if not matched_gt:
                 # Make sure this unmatched spike is not inside *any* GT window
                 in_any_gt = any(start_gt - tolerance <= spike <= max(start_gt - tolerance + max_detection_offset,end_gt) + padding for (start_gt, end_gt) in gt_sec)
-                if not in_any_gt and spike - last_fp_time >= max_detection_offset:
+                if not in_any_gt and spike - last_fp_time >= jitter:
                     classified_spikes_by_channel[ch].append(('FP', spike))
                     last_fp_time = spike
     
@@ -481,13 +482,329 @@ save_path= os.path.join(os.path.dirname(__file__), "live_plots")
 #                                input=True, save_path=save_path,seed=1)
 # fig.show()
 
-fig=plot_livetest_channels(prefix=prefix, 
-                           parent_dir=parent_dir,
-                           identifier=identifier, 
-                           window=window, 
-                           dataset=3,
-                           channels=[0,3,6,],
-                           save_path=save_path, 
-                           padding=padding,
-                           tolerance=tolerance,
-                           input=True)
+# fig=plot_livetest_channels(prefix=prefix, 
+#                            parent_dir=parent_dir,
+#                            identifier=identifier, 
+#                            window=window, 
+#                            dataset=3,
+#                            channels=[0,3,6,],
+#                            save_path=save_path, 
+#                            padding=padding,
+#                            tolerance=tolerance,
+#                            input=True)
+
+
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+from collections import defaultdict
+import json
+
+
+def plot_livetest_channels_matplotlib(prefix, parent_dir, identifier, window=None,
+                                       title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=0,
+                                       input=True, filename=None, seed=None, channels=[0],
+                                       tolerance=None, jitter=100, padding=0, max_detection_offset=80):
+
+    data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(identifier))
+    datasets = os.listdir(data_dir)
+    if "config.json" in datasets:
+        datasets.remove("config.json")
+
+    spikes = np.load(os.path.join(data_dir, datasets[dataset], 'spike_data.npy'))
+    gt = np.load(os.path.join(data_dir, datasets[dataset], 'ripples.npy'))
+    data = np.load(os.path.join(data_dir, datasets[dataset], 'filtered_data.npy'))
+
+    if seed is not None:
+        outputspikes = np.load(os.path.join(os.path.dirname(__file__), "spikes", f'{prefix}_spikes_seed{seed}.npy'))
+        param_filename = f'{prefix}_results_seed{seed}.json'
+    else:
+        outputspikes = np.load(os.path.join(os.path.dirname(__file__), "spikes", f'{prefix}_spikes.npy'))
+        param_filename = f'{prefix}_results.json'
+
+    with open(os.path.join(os.path.dirname(__file__), param_filename), 'r') as f:
+        params = json.load(f)
+
+    if "time_duration" in params:
+        time_duration = params["time_duration"] * 1000
+        window_data = np.arange(seed * time_duration, (seed + 1) * time_duration, 1)
+        data = data[window_data]
+        ripples_window = [ripple for ripple in gt if ripple[1] >= window_data[0] and ripple[0] <= window_data[-1]]
+        gt = np.array(ripples_window) - window_data[0]
+
+    parameters = params["parameters"]
+    max_detection_offset /= 1000
+    refractory_period = 0
+    tolerance = parameters["tolerance"] / 1000 if tolerance is None else tolerance / 1000
+    padding = padding / 1000
+    jitter = jitter / 1000
+
+    if window is not None:
+        start, end = window
+        start = int(start * 1000)
+        end = int(end * 1000)
+        end = min(end, data.shape[0])
+    else:
+        start, end = 0, len(data)
+
+    data = data[start:end, :]
+    spikes = spikes[start:end, :]
+    gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
+    outputspikes = outputspikes[dataset * 8:(dataset + 1) * 8, :]
+
+    gt_sec = gt / 1000
+    filtered_outputspikes_sec = [(ch_spikes[(ch_spikes >= start) & (ch_spikes < end)] / 1000)
+                                  for ch_spikes in outputspikes]
+    time = np.arange(start, end) / 1000
+
+    classified_spikes_by_channel = defaultdict(list)
+
+    for ch, spike_times in enumerate(filtered_outputspikes_sec):
+        used_gt = set()
+        last_fp_time, last_tp_time = -1e10, -1e10
+        for spike in spike_times:
+            matched_gt = False
+            for gt_idx, (start_gt, end_gt) in enumerate(gt_sec):
+                if gt_idx in used_gt:
+                    continue
+                if start_gt - tolerance <= spike <= start_gt + max_detection_offset + tolerance:
+                    if spike - last_tp_time >= refractory_period:
+                        classified_spikes_by_channel[ch].append(('TP', spike))
+                        used_gt.add(gt_idx)
+                        last_tp_time = spike
+                        matched_gt = True
+                        # if spike <= start_gt:
+                            # print(f"Spike before onset at time: {spike} s, GT onset at {start_gt} s")
+                        break
+            if not matched_gt:
+                in_any_gt = any(start_gt - tolerance <= spike <= start_gt + tolerance + max_detection_offset + padding for (start_gt, end_gt) in gt_sec)
+                if not in_any_gt and spike - last_fp_time >= jitter:
+                    classified_spikes_by_channel[ch].append(('FP', spike))
+                    last_fp_time = spike
+
+    fig, axes = plt.subplots(len(channels), 1, figsize=(15, 3 * len(channels)), sharex=True, sharey=True)
+    if len(channels) == 1:
+        axes = [axes]
+
+    for i, ch in enumerate(channels):
+        ax = axes[i]
+        ax.plot(time, data[:, ch], label=f"Ch {ch}", color="black", alpha=0.5)
+        y_max = np.max(data[:, ch]) * 1.2
+        y_min = np.min(data[:, ch]) * 1.2
+        output_y = y_min + (y_max - y_min) * 0.2
+        ch_spikes_sec = filtered_outputspikes_sec[ch]
+        ax.scatter(ch_spikes_sec, [output_y]*len(ch_spikes_sec), color='purple', marker='o', s=30, label='Output Spikes')
+
+        if input:
+            spikes_ch = spikes[:, ch, :]
+            up_spike_times_sec = (np.where(spikes_ch[:, 0] == 1)[0] + start) / 1000
+            down_spike_times_sec = (np.where(spikes_ch[:, 1] == 1)[0] + start) / 1000
+            spike_height = (y_max - y_min) * 0.2
+            ax.vlines(up_spike_times_sec, ymin=y_max - 2*spike_height, ymax=y_max - spike_height, color='red', alpha=0.3, label='Up Spikes')
+            ax.vlines(down_spike_times_sec, ymin=y_min + spike_height, ymax=y_min + 2*spike_height, color='blue', alpha=0.3, label='Down Spikes')
+
+        # Identify TP indices to detect FNs
+        used_gt = set(idx for (label, time_spike) in classified_spikes_by_channel[ch] if label == 'TP' 
+                      for idx, (start_gt, end_gt) in enumerate(gt_sec)
+                      if start_gt - tolerance <= time_spike <= start_gt + max_detection_offset + tolerance)
+
+        for idx, (label, spike_time) in enumerate(classified_spikes_by_channel[ch]):
+            color = 'green' if label == 'TP' else 'red'
+            ax.axvline(x=spike_time, color=color, linestyle='--', linewidth=1, label=f"{label}" if idx == 0 else None)
+            if label == "FP":
+                ax.axvline(x=spike_time, color=color, linestyle='--', linewidth=1, label=f"{label}" if idx == 0 else None)
+                ax.add_patch(Rectangle((spike_time, y_min), 0.1, y_max - y_min, alpha=0.1, color='red', label='FP' if idx == 0 else None))
+
+        for idx, ripple in enumerate(gt_sec):
+            ax.add_patch(Rectangle((ripple[0], y_min), ripple[1] - ripple[0], y_max - y_min, alpha=0.2, color='yellow', label='GT Ripple' if idx == 0 else None))
+            ax.add_patch(Rectangle((ripple[0] - tolerance, y_min), max_detection_offset + 2 * tolerance, y_max - y_min, alpha=0.1, color='orange', label='Tolerance' if idx == 0 else None))
+
+            if idx not in used_gt:
+                # fn_center = ripple[0] + (ripple[1] - ripple[0]) / 2
+                fn_center= ((ripple[0] - tolerance) +(ripple[0]+max_detection_offset+tolerance)) / 2
+                ax.axvline(x=fn_center, color='blue', linestyle='--', linewidth=1, label='FN' if idx == 0 else None)
+
+        ax.set_ylim([y_min, y_max])
+        ax.set_ylabel(ylabel, fontsize=14)
+        ax.set_xlim([time[0]-0.01*len(time)/1000, time[-1]+0.01*len(time)/1000])
+    axes[-1].set_xlabel(xlabel, fontsize=14)
+    axes[-1].tick_params(axis='both', labelsize=14)
+    plt.tight_layout()
+
+    if filename:
+        save_path = os.path.join(os.path.dirname(__file__), "live_plots")
+        os.makedirs(save_path, exist_ok=True)
+        plt.savefig(os.path.join(save_path, filename), dpi=300)
+        print(f"Plot saved to {os.path.join(save_path, filename)}")
+
+    plt.show()
+    return fig
+
+
+def plot_small_part(prefix, parent_dir, identifier, window=None,
+                                       title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=0,
+                                       input=True, seed=None, channels=[0],
+                                       tolerance=None, jitter=100, padding=0, max_detection_offset=80,filename=None):
+
+    data_dir = os.path.join(parent_dir, "extract_Nripples", "train_pedro", "dataset_up_down", str(identifier))
+    datasets = os.listdir(data_dir)
+    if "config.json" in datasets:
+        datasets.remove("config.json")
+
+    spikes = np.load(os.path.join(data_dir, datasets[dataset], 'spike_data.npy'))
+    gt = np.load(os.path.join(data_dir, datasets[dataset], 'ripples.npy'))
+    data = np.load(os.path.join(data_dir, datasets[dataset], 'filtered_data.npy'))
+
+    if seed is not None:
+        outputspikes = np.load(os.path.join(os.path.dirname(__file__), "spikes", f'{prefix}_spikes_seed{seed}.npy'))
+        param_filename = f'{prefix}_results_seed{seed}.json'
+    else:
+        outputspikes = np.load(os.path.join(os.path.dirname(__file__), "spikes", f'{prefix}_spikes.npy'))
+        param_filename = f'{prefix}_results.json'
+
+    with open(os.path.join(os.path.dirname(__file__), param_filename), 'r') as f:
+        params = json.load(f)
+
+    if "time_duration" in params:
+        time_duration = params["time_duration"] * 1000
+        window_data = np.arange(seed * time_duration, (seed + 1) * time_duration, 1)
+        data = data[window_data]
+        ripples_window = [ripple for ripple in gt if ripple[1] >= window_data[0] and ripple[0] <= window_data[-1]]
+        gt = np.array(ripples_window) - window_data[0]
+
+    parameters = params["parameters"]
+    max_detection_offset /= 1000
+    refractory_period = 0
+    tolerance = parameters["tolerance"] / 1000 if tolerance is None else tolerance / 1000
+    padding = padding / 1000
+    jitter = jitter / 1000  # Convert jitter to seconds
+    if window is not None:
+        start, end = window
+        start = int(start * 1000)
+        end = int(end * 1000)
+        end = min(end, data.shape[0])
+    else:
+        start, end = 0, len(data)
+
+    data = data[start:end, :]
+    spikes = spikes[start:end, :]
+    gt = gt[(gt[:, 1] >= start) & (gt[:, 0] < end)]
+    outputspikes = outputspikes[dataset * 8:(dataset + 1) * 8, :]
+
+    time = np.arange(end - start) / 1000
+
+    gt_sec = (gt - start) / 1000
+    filtered_outputspikes_sec = [(ch_spikes[(ch_spikes >= start) & (ch_spikes < end)] - start) / 1000
+                                  for ch_spikes in outputspikes]
+
+    classified_spikes_by_channel = defaultdict(list)
+    used_gt_by_channel = {}
+    for ch, spike_times in enumerate(filtered_outputspikes_sec):
+        used_gt = set()
+        last_fp_time, last_tp_time = -1e10, -1e10
+        for spike in spike_times:
+            matched_gt = False
+            for gt_idx, (start_gt, end_gt) in enumerate(gt_sec):
+                if gt_idx in used_gt:
+                    continue
+                if start_gt - tolerance <= spike <= start_gt + max_detection_offset + tolerance:
+                    if spike - last_tp_time >= refractory_period:
+                        classified_spikes_by_channel[ch].append(('TP', spike))
+                        used_gt.add(gt_idx)
+                        last_tp_time = spike
+                        matched_gt = True
+                        break
+            if not matched_gt:
+                in_any_gt = any(start_gt - tolerance <= spike <= start_gt + tolerance + max_detection_offset + padding for (start_gt, end_gt) in gt_sec)
+                if not in_any_gt and spike - last_fp_time >= jitter:
+                    classified_spikes_by_channel[ch].append(('FP', spike))
+                    last_fp_time = spike
+        used_gt_by_channel[ch] = used_gt
+
+    fig, axes = plt.subplots(len(channels), 1, figsize=(8, 3 * len(channels)), sharex=True, sharey=True)
+    if len(channels) == 1:
+        axes = [axes]
+
+    for i, ch in enumerate(channels):
+        used_gt = used_gt_by_channel[ch]  # correct set for this channel
+        ax = axes[i]
+        ax.plot(time, data[:, ch], label=f"Ch {ch}", color="black", alpha=0.5)
+        # y_max = np.max(data[:, ch]) * 1.2
+        # y_min = np.min(data[:, ch]) * 1.2
+        y_min=-1.75
+        y_max=1.75
+        output_y = y_min + (y_max - y_min) * 0.2
+        ch_spikes_sec = filtered_outputspikes_sec[ch]
+        ax.scatter(ch_spikes_sec, [output_y] * len(ch_spikes_sec), color='purple', marker='o', s=30, label='Output Spikes')
+        if input:
+            spikes_ch = spikes[:, ch, :]
+            up_spike_times_sec = np.where(spikes_ch[:, 0] == 1)[0] / 1000
+            down_spike_times_sec = np.where(spikes_ch[:, 1] == 1)[0] / 1000
+            spike_height = (y_max - y_min) * 0.2
+            ax.vlines(up_spike_times_sec, ymin=y_max - 2 * spike_height, ymax=y_max - spike_height, color='red', alpha=0.3, label='Up Spikes')
+            ax.vlines(down_spike_times_sec, ymin=y_min + spike_height, ymax=y_min + 2 * spike_height, color='blue', alpha=0.3, label='Down Spikes')
+
+        for idx, (label, spike_time) in enumerate(classified_spikes_by_channel[ch]):
+            color = 'green' if label == 'TP' else 'red'
+            ax.axvline(x=spike_time, color=color, linestyle='--', linewidth=1, label=f"{label}" if idx == 0 else None)
+            if label == "FP":
+                ax.add_patch(Rectangle((spike_time, y_min), 0.1, y_max - y_min, alpha=0.1, color='red', label='FP' if idx == 0 else None))
+
+        for idx, ripple in enumerate(gt_sec):
+            ax.add_patch(Rectangle((ripple[0], y_min), ripple[1] - ripple[0], y_max - y_min, alpha=0.2, color='yellow', label='GT Ripple' if idx == 0 else None))
+            ax.add_patch(Rectangle((ripple[0] - tolerance, y_min), max_detection_offset+tolerance*2, y_max - y_min, alpha=0.1, color='orange', label='Tolerance' if idx == 0 else None))
+            if idx not in used_gt:
+                # fn_center = ripple[0] + (ripple[1] - ripple[0]) / 2
+                fn_center= ((ripple[0] - tolerance) +(ripple[0]+max_detection_offset+tolerance)) / 2
+                ax.axvline(x=fn_center, color='blue', linestyle='--', linewidth=1, label='FN' if idx == 0 else None)
+        ax.set_ylim([y_min, y_max])
+        # ax.set_ylabel(f"Ch {ch}")
+        # ax.set_xticks(np.arange(0, (end - start)+25, 25))
+        ax.set_xticklabels([])
+        ax.tick_params(axis='both', labelsize=14)
+        # ax.set_title(f"Channel {ch}", fontsize=14)
+    # axes[-1].set_xlabel(xlabel)
+    # fig.suptitle(title)
+    plt.tight_layout()
+
+    if filename:
+        save_path = os.path.join(os.path.dirname(__file__),"live_plots")
+        fig.savefig(os.path.join(save_path, filename), dpi=300)
+        print(f"Plot saved to {os.path.join(save_path, filename)}")
+
+    plt.show()
+    return fig
+
+adapt=0
+prefix="updnb4ds_100_7"
+# prefix=f"dsb4updn_median_200_12b"
+prefix+=f"_{adapt}" if adapt>0 else ""
+identifier="30000_1000_100"
+window=None
+# window=(100,110)
+
+dataset=3
+filename=None
+# filename=f"{prefix}_{dataset}_100_110.png"
+
+# fig=plot_livetest_channels_matplotlib(prefix, parent_dir, identifier, window=window,
+#                                        title='Live Test Data', xlabel=None, ylabel='Amigo', dataset=dataset,
+#                                        input=False, filename=filename, seed=None, channels=[1],
+#                                        tolerance=20, jitter=100, padding=100, max_detection_offset=80)
+# window=(301.4, 302.8)  # Example window in seconds
+# window=(301.4,302.0)
+# window=(216.4,216.6)
+# window=(209.7,210.7)
+window=input("Enter window in seconds (e.g., 209.7,210.7): ")
+start_str, end_str = window.split(",")
+start, end = float(start_str), float(end_str)
+window = (start, end)
+
+i=input("Enter figure index (e.g., 1): ")
+filename=f"fn_{i}.png"
+fig=plot_small_part(prefix, parent_dir, identifier, window=window,
+                                       title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=dataset,
+                                       input=False, filename=filename, seed=None, channels=[1],
+                                       tolerance=20, jitter=100, padding=100, max_detection_offset=80)
+# fig.show()
