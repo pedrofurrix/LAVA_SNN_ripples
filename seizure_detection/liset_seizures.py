@@ -59,14 +59,14 @@ class liset_seizures():
             self.fs_conv_fact = self.original_fs/self.downsampled_fs
         else:
             self.fs_conv_fact = 1
-        self.shank=shank
+        self.shank=shank-1
         # Initialize class variables.
         self.prediction_times = []
         self.model = None
         self.default_channels = [16, 4, 1, 13, 15, 3, 2, 14]
 
         # Load the data.
-        self.load(data_path, shank, downsample = downsample, normalize=normalize)
+        self.load(data_path, self.shank, downsample = downsample, normalize=normalize)
 
 
         # Try to load the ripples if the path contain a file with ripple times.
@@ -299,7 +299,7 @@ class liset_seizures():
         try:
             filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
             self.file_len = os.path.getsize(filename=filename)
-            self.file_samples = self.file_len / 43 / 2
+            self.file_samples = self.file_len / self.n_channels / 2
         except:
             if self.verbose:
                 print('.dat file not in path')
@@ -311,8 +311,8 @@ class liset_seizures():
                 print("Cannot load specified channels (listed channel IDs inconsistent with total number of channels).")
             return False
         
-        start = self.start * 43 * 2
-        numSamples = self.numSamples * 43 * 2
+        start = self.start * self.n_channels * 2
+        numSamples = self.numSamples * self.n_channels * 2
 
         if start > self.file_len:
             if self.verbose:
@@ -336,7 +336,7 @@ class liset_seizures():
             else:
                 raw = f.read(self.file_len - start)
             data = np.frombuffer(raw, dtype=np.int16)
-            data = RAW2ORDERED(data, channels)
+            data = RAW2ORDERED(data, channels, self.n_channels)
             if self.verbose:
                 print(f"Data loaded from {filename}")
                 print(f"Data shape: {data.shape}")
@@ -372,16 +372,24 @@ class liset_seizures():
                 return
             
         try:
-            channels = self.info['neurosparkmat']['channels'][0][0][8 * (shank -1):8 * shank]
+            channels = self.info['neurosparkmat']['channels'][0][0]
+            self.n_channels=len(channels)
+            channels = channels[8 * (shank):8 * (shank + 1)]
         except Exception as err:
             try:
                 channels =np.array(self.info['neurosparkmat']['channels'])
                 channels = channels.flatten()
-                channels = channels[8*(shank-1):8*shank]
+                self.n_channels=len(channels)
+
+                channels = channels[8*(shank):8*(shank+1)]
+
             except Exception as err:  
                 print(f'No data available for shank {shank}\n\n{err}')
                 return 
-        
+
+        if self.verbose:
+                    print(f'Channels loaded: {channels}')
+                    print(f'Number of channels: {self.n_channels}')
         raw_data = self.load_dat(data_path, channels, numSamples=self.numSamples)
 
         if hasattr(raw_data, 'shape'):
