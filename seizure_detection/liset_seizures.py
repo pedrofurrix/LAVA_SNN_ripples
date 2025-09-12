@@ -52,7 +52,7 @@ class liset_seizures():
         # Set the verbose
         self.verbose = verbose
         self.numSamples = numSamples
-        self.start = start
+        self.start = start*original_fs
         self.original_fs = original_fs
         if downsample:
             self.downsampled_fs = downsample
@@ -232,53 +232,61 @@ class liset_seizures():
 
         return in_chunk
     
-    def IISs_in_chunk(self, start, numSamples, fs, prop):
-        """
-        Return IIS times within the selected chunk.
-        """
-        if not numSamples:
-            numSamples = self.file_samples - self.start
-
-        lower = start / prop / fs
-        upper = (start + numSamples) / prop / fs
-
-        in_chunk = self.IISs_times[
-            (self.IISs_times >= lower * fs) &
-            (self.IISs_times <= upper * fs)
-        ]
-        return in_chunk
     
-    def seizures_in_chunk(self, start, numSamples, fs, prop):
+    def IISs_in_chunk(self, start_orig, numSamples_orig,):
         """
-        Return seizure intervals overlapping the selected chunk.
-        Safeguards against single seizure (shape (2,)) or no seizures.
+        Return absolute IIS sample indices (at downsampled rate) within the chunk.
         """
-        if not hasattr(self, "seizure_times"):
+        if not numSamples_orig:
+            numSamples_orig = (self.file_samples * self.n_channels * 2) - start_orig
+
+        # Define chunk boundaries in original sampling rate
+        lower_bound_orig = start_orig
+        upper_bound_orig = start_orig + numSamples_orig
+
+        # Filter absolute times
+        in_chunk_orig = self.IISs_times_absolute[
+            (self.IISs_times_absolute >= lower_bound_orig) &
+            (self.IISs_times_absolute <= upper_bound_orig)
+        ]
+        
+        # Convert to downsampled rate and return
+        return (in_chunk_orig / self.fs_conv_fact).astype(int)
+
+
+    def seizures_in_chunk(self, start_orig, numSamples_orig):
+        """
+        Finds seizure intervals that overlap with the loaded data chunk.
+
+        Returns:
+            np.ndarray: An (M, 2) array of seizure start/end times in absolute
+                        sample indices at the new, downsampled rate.
+        """
+        if not hasattr(self, "seizure_times_absolute") or self.seizure_times_absolute.size == 0:
             return np.empty((0, 2), dtype=int)
 
-        # ensure seizure_times is 2D: (N,2)
-        seizure_times = np.array(self.seizure_times)
-        if seizure_times.ndim == 1:
-            if seizure_times.size == 0:
-                return np.empty((0, 2), dtype=int)
-            elif seizure_times.size == 2:
-                seizure_times = seizure_times.reshape(1, 2)
-            else:
-                raise ValueError(f"Unexpected seizure_times shape: {seizure_times.shape}")
+        if not numSamples_orig:
+            # Calculate total samples if not provided
+            numSamples_orig = (self.file_samples * self.n_channels * 2) - start_orig
 
-        if not numSamples:
-            numSamples = self.file_samples - self.start
+        # 1. Define chunk boundaries in the original, high-resolution sampling rate
+        lower_bound_orig = start_orig
+        upper_bound_orig = start_orig + numSamples_orig
 
-        lower = start / prop
-        upper = (start + numSamples) / prop
+        # 2. Find seizures that overlap with the chunk.
+        # An overlap occurs if the seizure's end is after the chunk's start AND
+        # the seizure's start is before the chunk's end.
+        seizure_starts = self.seizure_times_absolute[:, 0]
+        seizure_ends = self.seizure_times_absolute[:, 1]
+        
+        mask = (seizure_ends >= lower_bound_orig) & (seizure_starts <= upper_bound_orig)
+        in_chunk_orig = self.seizure_times_absolute[mask]
 
-        # keep seizures that overlap with [lower, upper]
-        in_chunk = seizure_times[
-            (seizure_times[:, 1] >= lower) &
-            (seizure_times[:, 0] <= upper)
-        ]
+        # 3. Convert the absolute boundaries of the overlapping seizures
+        #    to the new, downsampled rate.
+        in_chunk_downsampled = (in_chunk_orig / self.fs_conv_fact).astype(int)
 
-        return in_chunk
+        return in_chunk_downsampled
 
 
     def load_dat(self, path, channels, numSamples = False, verbose=False):
@@ -372,16 +380,21 @@ class liset_seizures():
                 return
             
         try:
-            channels = self.info['neurosparkmat']['channels'][0][0]
-            self.n_channels=len(channels)
-            channels = channels[8 * (shank):8 * (shank + 1)]
+            all_channels = self.info['neurosparkmat'][0, 0]['channels'].flatten()            
+            print(all_channels)
+            self.n_channels=len(all_channels)
+            channels = all_channels[8 * (shank):8 * (shank + 1)]
+            if self.verbose:
+                print(channels)
         except Exception as err:
             try:
-                channels =np.array(self.info['neurosparkmat']['channels'])
+                channels = np.array(self.info['neurosparkmat']['channels'])
                 channels = channels.flatten()
                 self.n_channels=len(channels)
 
                 channels = channels[8*(shank):8*(shank+1)]
+                if self.verbose:
+                    print(channels)
 
             except Exception as err:  
                 print(f'No data available for shank {shank}\n\n{err}')
@@ -391,14 +404,16 @@ class liset_seizures():
                     print(f'Channels loaded: {channels}')
                     print(f'Number of channels: {self.n_channels}')
         raw_data = self.load_dat(data_path, channels, numSamples=self.numSamples)
-
+        # raw_data=self.load_dat_memmap(data_path, channels, numSamples=self.numSamples,verbose=self.verbose)
         if hasattr(raw_data, 'shape'):
             self.data = self.clean(raw_data, downsample, normalize)
             self.duration = self.data.shape[0]/self.fs
         self.load_IISs_times()
         self.load_seizure_times()
-        self.IISs_times=self.IISs_in_chunk(self.start, self.numSamples, self.fs, self.fs_conv_fact)
-        self.seizure_times=self.seizures_in_chunk(self.start, self.numSamples, self.fs, self.fs_conv_fact)
+        start_downsampled = int(self.start / self.fs_conv_fact)
+        self.IISs_times=self.IISs_in_chunk(self.start, self.numSamples)-start_downsampled
+        self.seizure_times=self.seizures_in_chunk(self.start, self.numSamples)-start_downsampled
+
 
     def clean(self, data, downsample, normalize):
         """
@@ -443,28 +458,29 @@ class liset_seizures():
         else:
             self.fig.savefig(fname, transparent=not background, bbox_inches='tight')
 
+    # Replace load_IISs_times with this. It now only loads ABSOLUTE times.
     def load_IISs_times(self):
-        if hasattr(self,"fs"):
+        if hasattr(self, "fs"):
             try:
                 times = self.info['neurosparkmat']['IISs'][0,0]['times'][self.shank, 0]
                 SD = self.info['neurosparkmat']['IISs'][0,0]['SD']
+
             except:
                 ref = self.info['neurosparkmat']['IISs']['times'][self.shank, 0]
                 data_object = self.info[ref]
                 times = data_object[()]
                 SD = np.array(self.info['neurosparkmat']['IISs']['SD'])
-            self.IISs_times = np.array(times).flatten()
+      
+            self.IISs_times_absolute = np.array(times).flatten() * self.original_fs
             self.has_IISs = True
-            self.num_IISs = len(self.IISs_times)
-            self.IISs_times = (self.IISs_times * self.fs - self.start / self.fs_conv_fact).astype(int)
-            self.SD=SD.squeeze()
+            self.num_IISs = len(self.IISs_times_absolute)
+
+                  # Store absolute times in samples AT THE ORIGINAL FS
             if self.verbose:
                 print(f"IISs times loaded: {self.IISs_times}")
                 print(f"IISs SD loaded: {self.SD}")
                 print(f"Number of IISs loaded: {self.num_IISs}")
-        else:
-            if self.verbose:
-                print("Cannot load IISs times because the sampling frequency is not defined.")
+
 
     def load_seizure_times(self):
         if hasattr(self,"fs"):
@@ -479,10 +495,23 @@ class liset_seizures():
                 thrRate = np.array(self.info['neurosparkmat']['seizure']['thrRate'])
                 dt = np.array(self.info['neurosparkmat']['seizure']['dt'])
             # self.seizure_times = np.array(times).flatten()
-            self.seizure_times=times.T
+
+            times_arr = np.array(times).T
+            # Now, times_arr should be (N, 2). We can add a safeguard check.
+            if times_arr.ndim == 1 and times_arr.size == 2:
+                # This handles the case of a single seizure being flattened.
+                times_arr = times_arr.reshape(1, 2)
+            elif times_arr.ndim != 2 or times_arr.shape[1] != 2:
+                if self.verbose:
+                    print(f"Seizure times have unexpected shape after transpose: {times_arr.shape}. Skipping.")
+                self.seizure_times_absolute = np.empty((0, 2))
+                return
+        
+          # Store absolute times in samples AT THE ORIGINAL FS
+            self.seizure_times_absolute = times_arr * self.original_fs
             self.has_seizures = True
-            self.num_seizures = len(self.seizure_times)
-            self.seizure_times = (self.seizure_times * self.fs - self.start / self.fs_conv_fact).astype(int)
+            self.num_seizures = len(self.seizure_times_absolute)
+            # self.seizure_times = (self.seizure_times * self.fs - self.start / self.fs_conv_fact).astype(int)
             self.thrRate=thrRate.squeeze()
             self.seizure_dt=dt.squeeze()
             if self.verbose:
@@ -546,9 +575,10 @@ class liset_seizures():
 
         if ylim:
             ax.set_ylim(ylim)
-
+        if not ch:
+            ch=range(8)
         # Determine vertical range
-        max_val = np.max(self.window) + offset * 8
+        max_val = np.max(self.window) + offset * (len(ch)-1)
         min_val = np.min(self.window)
 
         # Overlay IISs (point events)
@@ -581,7 +611,53 @@ class liset_seizures():
 
         if show:
             return fig, ax
- 
+
+    # Replace your entire load_dat method with this one.
+    def load_dat_memmap(self, path, channels, numSamples=False, verbose=False):
+        """
+        Load data from a .dat file using memory mapping for safety and efficiency.
+        """
+        try:
+            filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
+            self.file_len = os.path.getsize(filename=filename)
+            self.file_samples = self.file_len / self.n_channels / 2
+        except IndexError:
+            if self.verbose:
+                print('.dat file not in path')
+            return None
+
+        # Create a memory map of the file.
+        # The file is treated like a 2D array: (total_samples, total_channels)
+        # 'offset=0' assumes no header. 'order='F'' means Fortran-style (column-major),
+        # which matches how Intan/SpikeGadgets multiplexes data (ch1_t1, ch2_t1, ..., chN_t1, ch1_t2, ...)
+        raw_mmap = np.memmap(filename, dtype=np.int16, mode='r', order='F',
+                            shape=(int(os.path.getsize(filename) / self.n_channels / 2), self.n_channels))
+
+        # Define the chunk to load based on time samples
+        start_sample = int(self.start)
+        end_sample = None
+        if self.numSamples:
+            end_sample = int(start_sample + self.numSamples)
+
+        # Slice the memory-mapped array. This is where the actual data is read from disk.
+        # We select the desired time range (rows) and the channels for our shank (columns).
+        if self.numSamples:
+            data = raw_mmap[start_sample:end_sample, channels]
+        else:
+            print(channels)
+            print(start_sample)
+            channels=[int(c) for c in channels]
+            data = raw_mmap[start_sample:, channels]
+            
+
+        if self.verbose:
+            print(f"Data loaded from {filename} via memmap")
+            print(f"Data shape: {data.shape}")
+            print(f"Data type: {data.dtype}")
+            
+        return np.array(data) # Return a copy in memory
+
+  
 def z_score_normalization(data):
 	channels = range(np.shape(data)[1])
 

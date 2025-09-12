@@ -1,0 +1,2 @@
+# Ignore all files within train_test_data
+train_test_data/*
