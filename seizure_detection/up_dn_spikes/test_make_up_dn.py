@@ -1,6 +1,6 @@
 from make_up_dn_iis import make_up_dn_dataset
 parent=r"E:\neurospark_mat\KA MODEL TRANSITION SESSIONS"
-ids=[1,5]
+ids=[2,5]
 time_max=120
 downsampled_fs=1000
 bandpass=[1,70]

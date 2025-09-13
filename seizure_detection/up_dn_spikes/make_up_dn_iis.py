@@ -14,7 +14,7 @@ import json
 
 def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor, percentile, refractory, overlap,adapt_threshold=False):
     for id in ids:
-        save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "up_dn_data")
+        save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_validation")
         os.makedirs(save_dir, exist_ok=True)
         dataset_list=os.listdir(parent)
         data_path = os.path.join(parent, dataset_list[id])

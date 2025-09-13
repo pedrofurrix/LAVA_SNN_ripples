@@ -12,11 +12,11 @@ spike_grad = surrogate.fast_sigmoid()   # surrogate.atan()
 # Parameters for Dense Layers
 inputDataDim = 2       # max_channel_idx - min_channel_idx + 1    # Number of input channels
 
-input_to_hidden = (inputDataDim, 24) # 16 # TODO: Increase the size of this layer # (inputDataDim, 100) # (inputDataDim, 500)  # Number of neurons in the first Fully-Connected Layer
+input_to_hidden = (inputDataDim, 8) # 16 # TODO: Increase the size of this layer # (inputDataDim, 100) # (inputDataDim, 500)  # Number of neurons in the first Fully-Connected Layer
 
 hiddenL2Dim = (input_to_hidden[1], input_to_hidden[1])  # Number of neurons in the Recurrent Fully-Connected Layer (L2)
 
-hiddenL3Dim = (input_to_hidden[1], 16)  # Number of neurons in the Fully-Connected Layer (L3)
+hiddenL3Dim = (input_to_hidden[1], 6)  # Number of neurons in the Fully-Connected Layer (L3)
 
 hiddenL4Dim = (hiddenL3Dim[1], input_to_hidden[1])  # Number of neurons in the Recurrent Fully-Connected Layer (L4)
 

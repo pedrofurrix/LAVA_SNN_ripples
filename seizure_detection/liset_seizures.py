@@ -383,6 +383,7 @@ class liset_seizures():
             all_channels = self.info['neurosparkmat'][0, 0]['channels'].flatten()            
             print(all_channels)
             self.n_channels=len(all_channels)
+            self.n_channels=43
             channels = all_channels[8 * (shank):8 * (shank + 1)]
             if self.verbose:
                 print(channels)
@@ -474,10 +475,10 @@ class liset_seizures():
             self.IISs_times_absolute = np.array(times).flatten() * self.original_fs
             self.has_IISs = True
             self.num_IISs = len(self.IISs_times_absolute)
-
+            self.SD = SD.squeeze()
                   # Store absolute times in samples AT THE ORIGINAL FS
             if self.verbose:
-                print(f"IISs times loaded: {self.IISs_times}")
+                print(f"IISs times loaded: {self.IISs_times_absolute}")
                 print(f"IISs SD loaded: {self.SD}")
                 print(f"Number of IISs loaded: {self.num_IISs}")
 
@@ -515,10 +516,10 @@ class liset_seizures():
             self.thrRate=thrRate.squeeze()
             self.seizure_dt=dt.squeeze()
             if self.verbose:
-                print(f"Seizure times loaded: {self.seizure_times}")
+                print(f"Seizure times loaded: {self.seizure_times_absolute}")
                 print(f"Seizure thresholds loaded: {self.thrRate}")
                 print(f"Seizure durations loaded: {self.seizure_dt}")
-                print(f"Number of seizures loaded: {self.seizure_times.shape}")
+                print(f"Number of seizures loaded: {self.seizure_times_absolute.shape}")
         else:
             if self.verbose:
                 print("Cannot load seizure times because the sampling frequency is not defined.")
