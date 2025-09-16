@@ -16,7 +16,7 @@ session = sessions[idx]
 data_path=os.path.join(parent,session)
 print(f"Selected: {idx}: {session}")
 
-liset=liset_seizures(data_path,shank=3,downsample=1000,normalize=True,start=0,verbose=True,)#numSamples=1500*30000)
+liset=liset_seizures(data_path,shank=1,downsample=1000,normalize=True,start=0,verbose=True,)#numSamples=1500*30000)
 
 # --- Plotting the Whole Signal for a Single Channel ---
 
