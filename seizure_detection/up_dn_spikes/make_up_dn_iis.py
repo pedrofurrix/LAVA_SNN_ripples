@@ -12,15 +12,27 @@ from up_dn_spikes.utils_encoding import *
 import random
 import json
 
-def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor, percentile, refractory, overlap,adapt_threshold=False):
+def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor, percentile, refractory, overlap,adapt_threshold=False,window=None):
     for id in ids:
         save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_validation")
+        if adapt_threshold:
+            save_dir = os.path.join(save_dir, f"adapt_{time_max}")
+        else:
+            save_dir = os.path.join(save_dir, f"adapt_0")
         os.makedirs(save_dir, exist_ok=True)
         dataset_list=os.listdir(parent)
         data_path = os.path.join(parent, dataset_list[id])
         thresholds_all={}
+        if window is not None:
+            start=window[0]
+            numSamples=(window[1]-window[0])*30000 if window[1] != 0 else False
+        else:
+            start=0
+            numSamples=False
         for shank in [1,2,3,4]:   
-            liset=liset_seizures(data_path, shank=shank, downsample=downsampled_fs, normalize=True, start=0, verbose=False,numSamples=30000*1700)
+            liset=liset_seizures(data_path, shank=shank, downsample=downsampled_fs, normalize=True, start=start, verbose=False,numSamples=numSamples)
+            liset_threshold=liset_seizures(data_path, shank=shank, downsample=downsampled_fs, normalize=True, start=0, verbose=False,numSamples=
+                                                time_max*30000)
             spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))
             filtered=np.zeros((liset.data.shape[0], liset.data.shape[1]))
             IISs_times=np.array(liset.IISs_times)
@@ -49,13 +61,17 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
                         else:
                             threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
                         # Spikify
+                        threshold=max(threshold,1.2)
                         spikified_window,initial_value = up_down_channel(current_window, threshold, downsampled_fs, refractory,initial_value=initial_value,return_value=True)
                         spikified[time:right_edge, channel, :] = spikified_window
                         thresholds.append(round(threshold,4))
                         
                     # config[dataset]["thresholds"][channel] = thresholds
                 else:
-                    threshold_window = filtered_channel[:int(downsampled_fs * time_max)]
+                    # Compute threshold
+                    threshold_channel_signal = liset_threshold.data[:, channel]
+                    threshold_filtered_channel = bandpass_filter(threshold_channel_signal, bandpass=bandpass, fs=liset.fs)
+                    threshold_window = threshold_filtered_channel[:int(downsampled_fs * time_max)]
                     if percentile:
                         threshold = threshold_percentile(threshold_window, downsampled_fs, window_size, sample_ratio * 100, scaling_factor)
                     else:
@@ -82,7 +98,7 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
             json.dump(thresholds_all, f, indent=4)
 
 
-def make_windows(ids, WINDOW_SIZE,WINDOW_SHIFT,MARGINS,min_spikes=0,fraction=(0,1),min_threshold=1):
+def make_windows(ids, WINDOW_SIZE,WINDOW_SHIFT,MARGINS,min_spikes=0,fraction=(0,1),min_threshold=1,adapt_threshold=0):
     # Lists to store the final windowed data
     windowed_input_data = []
     windowed_gt = []
@@ -98,7 +114,7 @@ def make_windows(ids, WINDOW_SIZE,WINDOW_SHIFT,MARGINS,min_spikes=0,fraction=(0,
     dataset_iiss_offset = 0
     current_iiss_id = 0
 
-    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "up_dn_data")
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "up_dn_data", f"adapt_{adapt_threshold}")
     dataset_list=os.listdir(data_dir)
 
     for id in ids:
@@ -126,9 +142,9 @@ def make_windows(ids, WINDOW_SIZE,WINDOW_SHIFT,MARGINS,min_spikes=0,fraction=(0,
 
         
             for channel in range(spikified.shape[1]):
-                if thresholds_shank[channel]<min_threshold:
-                    print(f"[WARNING] Channel {channel} in Shank {shank} has a very low threshold ({thresholds_shank[channel]}). Skipping...")
-                    continue
+                # if thresholds_shank[channel]<min_threshold:
+                #     print(f"[WARNING] Channel {channel} in Shank {shank} has a very low threshold ({thresholds_shank[channel]}). Skipping...")
+                #     continue
                 curr_iiss_id = 0
                 spikified_channel = spikified[beginning_step:end_step, channel, :]
                 filtered_liset= filtered[beginning_step:end_step, channel]

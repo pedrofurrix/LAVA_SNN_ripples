@@ -17,9 +17,12 @@ if __name__ == "__main__":
     # prefix = args.prefix
     # adapt = args.adapt
     # test_ds_b4 = args.test_dsb4
+    ids_networks=[1,2,3,4,5,6]
     ids=[0,1]
     common_identifier = "iiss"
-    prefixes=[common_identifier+"_1b",common_identifier+"_1f",common_identifier+"_3b",common_identifier+"_3f",]
+    prefixes=[f"{common_identifier}_{idn}b" for idn in ids_networks] + [f"{common_identifier}_{idn}f" for idn in ids_networks]
+    adapts=[0,20,60,120]
     for prefix in prefixes:
-        run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_threshold=0)
+        for adapt in adapts:
+            run_inference(prefix, ids, adapt, export_spikes=True, seed=None,min_threshold=0)
     gc.collect()

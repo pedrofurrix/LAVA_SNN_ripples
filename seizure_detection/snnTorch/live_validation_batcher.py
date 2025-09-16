@@ -18,7 +18,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     parent_dir = os.path.abspath(os.path.join(curr_dir, os.pardir))
 
-    dataset_path = os.path.join(parent_dir, "up_dn_spikes", "live_validation")
+    dataset_path = os.path.join(parent_dir, "up_dn_spikes", "live_validation",f"adapt_{adapt}")
 
     # # Constants
     # RIPPLE_DETECTION_OFFSET = [18, 45, 31, 20]
@@ -68,10 +68,11 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
             gt_tensor = torch.tensor(iiss, dtype=torch.float32).to(device)
             all_metrics[dataset][shank] = {}
             thresholds_shank=thresholds_all[str(shank)]
-            for channel in range(data.shape[1]):
-                if thresholds_shank[channel]<min_threshold:
-                    print(f"[WARNING] Channel {channel} in Shank {shank} has a very low threshold ({thresholds_shank[channel]}). Skipping...")
-                    continue
+            channels=[3]
+            for channel in channels:
+                # while thresholds_shank[channel]<min_threshold:
+                #     print(f"[WARNING] Channel {channel} in Shank {shank} has a very low threshold ({thresholds_shank[channel]}). Skipping...")
+                #     channel+=1
                 print(f"  Channel {channel} | IISs: {len(iiss)}")
                 curr_gt_idx = 0
                 active_gts = deque()
@@ -153,7 +154,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
     net_prefix = f"{prefix}_adapt{adapt}" if adapt else prefix
 
     if export_spikes:
-        out_dir = "eval/spikes"
+        out_dir = os.path.join(curr_dir,"eval","spikes")
         os.makedirs(out_dir, exist_ok=True)
         np.save(os.path.join(out_dir, f"{net_prefix}_spikes.npy"), out_spikes_padded)
         print(f"Saved spikes to: {out_dir}/{net_prefix}_spikes.npy")
