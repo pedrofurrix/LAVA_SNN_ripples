@@ -17,10 +17,10 @@ if __name__ == "__main__":
     # prefix = args.prefix
     # adapt = args.adapt
     # test_ds_b4 = args.test_dsb4
-    ids_networks=[1,2,3,4,5,6]
+    ids_networks=[4,5,6]
     ids=[0,1]
     common_identifier = "iiss"
-    prefixes=[f"{common_identifier}_{idn}b" for idn in ids_networks] + [f"{common_identifier}_{idn}f" for idn in ids_networks]
+    prefixes=[f"{common_identifier}_{idn}b" for idn in ids_networks] + [f"{common_identifier}_adapt20_1b",f"{common_identifier}_adapt20_2b"]
     adapts=[0,20,60,120]
     for prefix in prefixes:
         for adapt in adapts:

@@ -12,9 +12,9 @@ from up_dn_spikes.utils_encoding import *
 import random
 import json
 
-def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor, percentile, refractory, overlap,adapt_threshold=False,window=None):
+def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor, percentile, refractory, overlap,adapt_threshold=False,window=None,folder="up_dn_data"):
     for id in ids:
-        save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "live_validation")
+        save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), folder)
         if adapt_threshold:
             save_dir = os.path.join(save_dir, f"adapt_{time_max}")
         else:
@@ -61,7 +61,7 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
                         else:
                             threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
                         # Spikify
-                        threshold=max(threshold,1.2)
+                        threshold=max(threshold,0.5)
                         spikified_window,initial_value = up_down_channel(current_window, threshold, downsampled_fs, refractory,initial_value=initial_value,return_value=True)
                         spikified[time:right_edge, channel, :] = spikified_window
                         thresholds.append(round(threshold,4))
@@ -85,6 +85,7 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
                     spikified[:,channel,:]= spikified_window
                     # config[dataset]["thresholds"][channel] = round(threshold, 4)
                     print(f"Channel {channel} - Threshold: {round(threshold,4)}")
+                    threshold=max(threshold,0.5)
                 thresholds.append(round(threshold,4))
             thresholds_all[shank]=thresholds
              # Save Spikified Data            

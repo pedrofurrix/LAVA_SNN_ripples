@@ -58,7 +58,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
         with open(thresholds_path, 'r') as f:
             thresholds_all = json.load(f)
         all_metrics[dataset] = {}
-        for shank in [1,2,3,4]:
+        for shank in [2]:
             print(f" Shank {shank}")
             data = np.load(os.path.join(data_path, f"spikified_{shank}.npy"))
             iiss = np.load(os.path.join(data_path, f"IISs_{shank}.npy"))
@@ -154,7 +154,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
     net_prefix = f"{prefix}_adapt{adapt}" if adapt else prefix
 
     if export_spikes:
-        out_dir = os.path.join(curr_dir,"eval","spikes")
+        out_dir = os.path.join(curr_dir,"eval","live_results2","spikes")
         os.makedirs(out_dir, exist_ok=True)
         np.save(os.path.join(out_dir, f"{net_prefix}_spikes.npy"), out_spikes_padded)
         print(f"Saved spikes to: {out_dir}/{net_prefix}_spikes.npy")

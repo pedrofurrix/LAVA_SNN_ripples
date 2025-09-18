@@ -27,13 +27,13 @@ def process_network_results(
         data_path = os.path.join(dataset_path, dataset)
         shank_information = {}
 
-        for shank in [1, 2, 3, 4]:
+        for shank in [2]:
             # Load ground truth Interictal Spikes (IIS) and network-detected spikes for the shank
             try:
                 iiss = np.load(os.path.join(data_path, f"IISs_{shank}.npy"))
                 seizures = np.load(os.path.join(data_path, f"seizures_{shank}.npy"))
                 # The file contains spikes for each shank. The structure is assumed to be flat.
-                shank_spikes_all_channels = spikes[(dataset_id * 4) + shank - 1, :]
+                shank_spikes_all_channels = spikes[dataset_id, :]
             except FileNotFoundError:
                 print(f"  - Warning: Data for shank {shank} not found in {dataset}. Skipping.")
                 continue
@@ -107,14 +107,15 @@ def process_network_results(
             # 4. Store all calculated metrics for the shank
             shank_results = {
                 "num_iiss": len(iiss),
-                "num_detections": len(detected_iiss_indices),
+                "TP": len(detected_iiss_indices),
                 "num_filtered_spikes": len(filtered_shank_spikes),
                 "num_fps": len(fp_spikes),
                 "fp_spikes": fp_spikes,
                 "latencies": latencies,
                 # --- METRICS YOU ASKED FOR ---
-                "num_merged_fps": len(merged_fp_spikes),
+                "FP": len(merged_fp_spikes),
                 "merged_fp_spikes": merged_fp_spikes,
+                "FN": len(iiss) - len(detected_iiss_indices),
                 # --- -------------------- ---
                 "detected_iiss_indices": sorted(list(detected_iiss_indices)),
                 "undetected_iiss_indices": sorted([i for i in range(len(iiss)) if i not in detected_iiss_indices]),

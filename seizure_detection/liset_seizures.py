@@ -383,7 +383,7 @@ class liset_seizures():
             all_channels = self.info['neurosparkmat'][0, 0]['channels'].flatten()            
             print(all_channels)
             self.n_channels=len(all_channels)
-            self.n_channels=43
+            # self.n_channels=43
             channels = all_channels[8 * (shank):8 * (shank + 1)]
             if self.verbose:
                 print(channels)

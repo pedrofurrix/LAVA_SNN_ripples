@@ -1,2 +1,4 @@
 # Ignore all files within train_test_data
 train_test_data/*
+eval/spikes/*
+eval/live_results2/spikes/*

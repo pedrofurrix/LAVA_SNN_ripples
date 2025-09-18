@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from liset_tk.signal_aid import bandpass_filter
 
-parent=r"E:\neurospark_mat\KA MODEL TRANSITION SESSIONS"
-# parent=r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\KA MODEL TRANSITION SESSIONS"
+# parent=r"E:\neurospark_mat\KA MODEL TRANSITION SESSIONS"
+parent=r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\KA MODEL TRANSITION SESSIONS"
 sessions=os.listdir(parent)
 
 for i,s in enumerate(sessions):
@@ -69,6 +69,7 @@ if hasattr(liset, "IISs_times"):
 if hasattr(liset, "seizure_times"):
     seizure_times_sec = liset.seizure_times / liset.fs
     print(f"Found {seizure_times_sec.shape[0]} seizure events.")
+    # print(f"Seizure times (min): {seizure_times_sec // 60} min {seizure_times_sec % 60} sec")
     for i, (start, end) in enumerate(seizure_times_sec):
         for ax in axes:
             # Plot all seizures as filled regions
