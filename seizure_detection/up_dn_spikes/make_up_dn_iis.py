@@ -77,6 +77,8 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
                     else:
                         threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
                     # Spikify
+                    threshold=max(threshold,0.5)
+                    print(f"Channel {channel} - Threshold: {round(threshold,4)}")
                     spikified_window = up_down_channel(filtered_channel, threshold, downsampled_fs, refractory,initial_value=None,return_value=False)
                     # if factor > 1:
                     #     downsampled_window, _ = extract_spikes_downsample(spikified_window, factor)
@@ -84,8 +86,7 @@ def make_up_dn_dataset(parent, ids, time_max, downsampled_fs, bandpass, window_s
                     #     downsampled_window = spikified_window      
                     spikified[:,channel,:]= spikified_window
                     # config[dataset]["thresholds"][channel] = round(threshold, 4)
-                    print(f"Channel {channel} - Threshold: {round(threshold,4)}")
-                    threshold=max(threshold,0.5)
+
                 thresholds.append(round(threshold,4))
             thresholds_all[shank]=thresholds
              # Save Spikified Data            

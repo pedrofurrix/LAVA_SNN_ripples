@@ -27,7 +27,7 @@ def process_network_results(
         data_path = os.path.join(dataset_path, dataset)
         shank_information = {}
 
-        for shank in [2]:
+        for shank in [1]:
             # Load ground truth Interictal Spikes (IIS) and network-detected spikes for the shank
             try:
                 iiss = np.load(os.path.join(data_path, f"IISs_{shank}.npy"))
@@ -121,7 +121,7 @@ def process_network_results(
                 "undetected_iiss_indices": sorted([i for i in range(len(iiss)) if i not in detected_iiss_indices]),
             }
             shank_information[f"shank_{shank}"] = shank_results
-
+            print(f"  - Shank {shank}: TP={shank_results['TP']}, FP={shank_results['FP']}, FN={shank_results['FN']}, Num IIS={shank_results['num_iiss']}, Num Filtered Spikes={shank_results['num_filtered_spikes']}")
         information_dataset[dataset] = shank_information
 
     return information_dataset

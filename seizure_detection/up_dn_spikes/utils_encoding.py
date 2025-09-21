@@ -43,6 +43,7 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
     if verbose:
         print(f"Number of time steps: {num_timesteps} for window size {window_size} seconds")
     max_min_amplitude = np.zeros((num_timesteps, 2))
+    variation = np.zeros((num_timesteps))
     for interval_nr, interval_start in enumerate(np.arange(start=0, stop=duration, step=window_size)):
         interval_end = interval_start + window_size
         index = np.where((times >= interval_start) & (times <= interval_end))
@@ -50,19 +51,22 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
         min_amplitude = np.min(signal[index])
         max_min_amplitude[interval_nr, 0] = max_amplitude
         max_min_amplitude[interval_nr, 1] = min_amplitude
-   
+        variation[interval_nr] = abs(max_amplitude - min_amplitude)
+
     chosen_samples = max(int(np.round(num_timesteps * sample_ratio)), 1)
     if verbose:
         print(f"Chosen samples for threshold calculation: {chosen_samples}")
-    threshold_up = np.mean(np.sort(max_min_amplitude[:, 0])[:chosen_samples])
-    threshold_dn = np.mean(
-        np.sort(max_min_amplitude[:, 1] * -1)[:chosen_samples])
-    if verbose:
-        print(f"Threshold up: {threshold_up}, Threshold down: {threshold_dn}")
-        print(f"Final Threshold: {scaling_factor * (threshold_up + threshold_dn)}")
-    if plot:
-        plot_threshold_hist(max_min_amplitude[:,0],max_min_amplitude[:,1],threshold_up*scaling_factor,bins=20)
-    return scaling_factor*(threshold_up + threshold_dn)
+    # threshold_up = np.mean(np.sort(max_min_amplitude[:, 0])[:chosen_samples])
+    # threshold_dn = np.mean(
+    #     np.sort(max_min_amplitude[:, 1] * -1)[:chosen_samples])
+    # if verbose:
+    #     print(f"Threshold up: {threshold_up}, Threshold down: {threshold_dn}")
+    #     print(f"Final Threshold: {scaling_factor * (threshold_up + threshold_dn)}")
+    # if plot:
+    #     plot_threshold_hist(max_min_amplitude[:,0],max_min_amplitude[:,1],threshold_up*scaling_factor,bins=20)
+    # threshold= scaling_factor*(threshold_up + threshold_dn)
+    threshold = np.mean(np.sort(variation[:])[:chosen_samples])*scaling_factor
+    return threshold
 
 def threshold_percentile(signal,downsampled_fs,window_size,percentile,scaling_factor,plot=False,verbose=False):
     times=np.arange(0, len(signal)) / downsampled_fs  # Time in seconds # This will be for the original data...

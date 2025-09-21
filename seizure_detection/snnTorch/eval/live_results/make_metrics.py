@@ -30,7 +30,7 @@ def compute_metrics(info):
 
 adapt_levels = [0, 20, 60, 120]
 
-results_dir = os.path.dirname(os.path.abspath(__file__))
+results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),os.pardir,"live_results2")
 metrics_dir = os.path.join(results_dir, "metrics")
 os.makedirs(metrics_dir, exist_ok=True)
 
@@ -46,7 +46,7 @@ for adapt in adapt_levels:
     for net, datasets in all_results.items():
         for dataset, shanks in datasets.items():
             # always shank_2 in your case
-            shank_info = shanks.get("shank_2", {})
+            shank_info = shanks.get("shank_1", {})
             metrics = compute_metrics(shank_info)
 
             row = {"adapt": adapt, "network": net, "dataset": dataset}
