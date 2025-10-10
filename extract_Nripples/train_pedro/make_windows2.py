@@ -557,4 +557,93 @@ class TrainData:
         # Keep and adjust ripple indices relative to the new segment
         filtered_ripples = liset.ripples_GT[mask]
         self.ripples_GT = filtered_ripples - start_idx
-      
+
+def make_up_down_threshold_present(parent, time_max, downsampled_fs, bandpass, window_size, sample_ratio, scaling_factor,
+                          refractory, factor, percentile=False, adapt_threshold=False, overlap=0):
+    config={}
+    
+    # LOAD THE DATA
+    # Iterate over the datasets
+    dataset_id = 0
+    save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"adapt_{overlap}" if adapt_threshold else "adapt_0")    
+    os.makedirs(save_dir, exist_ok=True)
+    for dataset in os.listdir(parent):
+        print("Dataset:", dataset)
+        dataset_path = os.path.join(parent, dataset)
+        liset= liset_tk(dataset_path, shank=1, downsample=False, verbose=False)
+        liset=TrainData(liset,0,1)
+        downsample_factor=liset.fs//downsampled_fs
+
+        ripples=np.array(liset.ripples_GT)//(downsample_factor*factor)
+        spikified=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1], 2))
+        filtered=np.zeros((liset.data.shape[0]//(downsample_factor*factor), liset.data.shape[1]))
+        print("data shape: ", liset.data.shape)
+        print("ripples shape: ", ripples.shape)
+        ripples = ripples[np.argsort(ripples[:, 0])]
+        config[dataset] = {}
+        config[dataset]["thresholds"] = {}
+
+        for channel in range(liset.data.shape[1]):
+            initial_value=None
+            channel_signal = liset.data[:, channel]
+            filtered_channel = bandpass_filter(channel_signal, bandpass=bandpass, fs=liset.fs)
+            if downsample_factor > 1:
+                filtered_channel = decimation_downsampling(filtered_channel, downsample_factor)
+            filtered_liset=decimation_downsampling(filtered_channel, factor)
+            filtered[:, channel] = filtered_liset
+            if adapt_threshold:
+                thresholds = []
+                step = int(downsampled_fs * overlap)
+                win = int(downsampled_fs * time_max)
+                total_len = len(filtered_channel)
+                for time in range(0,total_len,step):
+                    if time<win:
+                        threshold_window = filtered_channel[:win]
+                    else:
+                        threshold_window = filtered_channel[time-win:time]
+                    right_edge = min(time + step, total_len)
+                    current_window = filtered_channel[time:right_edge]
+                    # Compute threshold
+                    if percentile:
+                        threshold = threshold_percentile(threshold_window, downsampled_fs, window_size, sample_ratio * 100, scaling_factor)
+                    else:
+                        threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
+                    # Spikify
+                    spikified_window,initial_value = up_down_channel(current_window, threshold, downsampled_fs, refractory,initial_value=initial_value,return_value=True)
+                        
+                    if factor > 1:
+                        downsampled_window, _ = extract_spikes_downsample(spikified_window, factor)
+                    else:
+                        downsampled_window = spikified_window
+                    # Append the current window
+                    left=time//factor
+                    right=(right_edge)//factor
+                    spikified[left:right, channel, :] = downsampled_window
+                    thresholds.append(round(threshold,4))
+                config[dataset]["thresholds"][channel] = thresholds
+            else:
+                threshold_window = filtered_channel[:int(downsampled_fs * time_max)]
+                if percentile:
+                    threshold = threshold_percentile(threshold_window, downsampled_fs, window_size, sample_ratio * 100, scaling_factor)
+                else:
+                    threshold = calculate_threshold(threshold_window, downsampled_fs, window_size, sample_ratio, scaling_factor)
+                 # Spikify
+                spikified_window = up_down_channel(filtered_channel, threshold, downsampled_fs, refractory,initial_value=None,return_value=False)
+                if factor > 1:
+                    downsampled_window, _ = extract_spikes_downsample(spikified_window, factor)
+                else:
+                    downsampled_window = spikified_window      
+                spikified[:,channel,:]= downsampled_window
+                config[dataset]["thresholds"][channel] = round(threshold, 4)
+        # After processing each dataset
+        dataset_save_path = os.path.join(save_dir, f"{dataset}_processed.npz")
+
+        np.savez_compressed(
+            dataset_save_path,
+            spikified=spikified,           # shape: (time, channels, 2)
+            filtered=filtered,             # shape: (time, channels)
+            thresholds=config[dataset]["thresholds"], # dict per channel
+            ripples=ripples                # GT ripples
+        )
+
+        print(f"✅ Saved {dataset_save_path}")
