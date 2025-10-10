@@ -58,7 +58,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
         with open(thresholds_path, 'r') as f:
             thresholds_all = json.load(f)
         all_metrics[dataset] = {}
-        for shank in [2]:
+        for shank in [1]:
             print(f" Shank {shank}")
             data = np.load(os.path.join(data_path, f"spikified_{shank}.npy"))
             iiss = np.load(os.path.join(data_path, f"IISs_{shank}.npy"))
@@ -68,7 +68,7 @@ def run_inference(prefix, ids, adapt=0, export_spikes=True, seed=None,min_thresh
             gt_tensor = torch.tensor(iiss, dtype=torch.float32).to(device)
             all_metrics[dataset][shank] = {}
             thresholds_shank=thresholds_all[str(shank)]
-            channels=[3]
+            channels=[4]
             for channel in channels:
                 # while thresholds_shank[channel]<min_threshold:
                 #     print(f"[WARNING] Channel {channel} in Shank {shank} has a very low threshold ({thresholds_shank[channel]}). Skipping...")
