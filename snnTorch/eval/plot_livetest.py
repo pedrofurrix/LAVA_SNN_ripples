@@ -761,7 +761,7 @@ def plot_small_part(prefix, parent_dir, identifier, window=None,
         ax.set_ylim([y_min, y_max])
         # ax.set_ylabel(f"Ch {ch}")
         # ax.set_xticks(np.arange(0, (end - start)+25, 25))
-        ax.set_xticklabels([])
+        # ax.set_xticklabels([])
         ax.tick_params(axis='both', labelsize=14)
         # ax.set_title(f"Channel {ch}", fontsize=14)
     # axes[-1].set_xlabel(xlabel)
@@ -782,17 +782,17 @@ prefix="updnb4ds_100_7"
 prefix+=f"_{adapt}" if adapt>0 else ""
 identifier="30000_1000_100"
 window=None
-# window=(100,110)
+window=(103.5,107)
 
 dataset=3
 filename=None
-# filename=f"{prefix}_{dataset}_100_110.png"
+filename=f"{prefix}_{dataset}_103_107.png"
 
-# fig=plot_livetest_channels_matplotlib(prefix, parent_dir, identifier, window=window,
-#                                        title='Live Test Data', xlabel=None, ylabel='Amigo', dataset=dataset,
-#                                        input=False, filename=filename, seed=None, channels=[1],
-#                                        tolerance=20, jitter=100, padding=100, max_detection_offset=80)
-# window=(301.4, 302.8)  # Example window in seconds
+fig=plot_livetest_channels_matplotlib(prefix, parent_dir, identifier, window=window,
+                                       title='Live Test Data', xlabel=None, ylabel='Thy', dataset=dataset,
+                                       input=False, filename=filename, seed=None, channels=[1],
+                                       tolerance=20, jitter=100, padding=100, max_detection_offset=80)
+# # window=(301.4, 302.8)  # Example window in seconds
 # window=(301.4,302.0)
 # window=(216.4,216.6)
 # window=(209.7,210.7)
@@ -802,7 +802,7 @@ start, end = float(start_str), float(end_str)
 window = (start, end)
 
 i=input("Enter figure index (e.g., 1): ")
-filename=f"fn_{i}.png"
+filename=f"{prefix}_{dataset}_{i}.png"
 fig=plot_small_part(prefix, parent_dir, identifier, window=window,
                                        title='Live Test Data', xlabel='Time (s)', ylabel='Value', dataset=dataset,
                                        input=False, filename=filename, seed=None, channels=[1],
