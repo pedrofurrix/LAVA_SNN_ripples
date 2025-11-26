@@ -144,8 +144,8 @@ def run_inference(
                 # Output spike?
                 if torch.sum(spk_out) > 0:
                     spk_out_int = spk_out.squeeze(0).int()
-                    session_spikes.append(step_time)
                     step_time = step * dt
+                    session_spikes.append(step_time)
                     refrac_mask = lif_out_refrac_times > step_time
                     valid_spk = torch.Tensor.bool(spk_out_int & (~refrac_mask))
 
