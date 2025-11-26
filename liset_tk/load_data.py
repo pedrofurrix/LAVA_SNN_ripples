@@ -5,7 +5,7 @@ import h5py
 import sys
 import os
 
-import bz_LoadBinary
+import liset_tk.bz_LoadBinary as bz_LoadBinary
 
 
 def load_info (path):

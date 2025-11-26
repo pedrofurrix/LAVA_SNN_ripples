@@ -1,7 +1,7 @@
 from liset_tk.read_data import read_data
 import os
 from liset_tk.signal_aid import bandpass_filter
-from .utils import *
+from snnTorch.generalization_madrid.utils import *
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
