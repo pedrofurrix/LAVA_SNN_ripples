@@ -36,13 +36,11 @@ class Net(nn.Module):
                 dtype=torch.float32     # Set the data type of the weights to float32
         )
 
-        # TODO: Should the LIF neurons be able to get a negative membrane potential? I think so?
         self.lif1 = snn.Synaptic(
             alpha=torch.full(size=(input_to_hidden[1],), fill_value=placeholder_val), 
             beta=torch.full(size=(input_to_hidden[1],), fill_value=placeholder_val),
             threshold=v_thr,
             reset_mechanism="zero", reset_delay=False,
-            # TODO: How to add Refractory Period?
             # init_hidden=True,   # enables the methods in snntorch.backprop to automatically clear the hidden states and detach them from the comp. graph
             spike_grad=spike_grad,
             learn_alpha=True,   # Learn the alpha parameter

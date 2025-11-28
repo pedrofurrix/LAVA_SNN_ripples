@@ -104,10 +104,11 @@ class read_data():
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
             numSamples = self.file_samples - self.start
-
-        in_chunk = ripples[(ripples[:,0] > start/prop/fs) & (ripples[:,0] < (start + numSamples)/prop/fs)]
-
-        return in_chunk
+        if ripples is not None and ripples.shape[0]>0:
+            in_chunk = ripples[(ripples[:,0] > start/prop/fs) & (ripples[:,0] < (start + numSamples)/prop/fs)]
+            return in_chunk
+        else: 
+            return None
 
 
     def load_dat(self, path, channels, numSamples = False, verbose=False):

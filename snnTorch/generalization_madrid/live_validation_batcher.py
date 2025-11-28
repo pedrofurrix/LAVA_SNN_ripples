@@ -33,9 +33,9 @@ def run_inference(
     RIPPLE_DETECTION_OFFSET = [18, 45, 31, 20]
     PRED_CAUSALITY_WINDOW = 5
     TOLERANCE = 20
-    MAX_DETECTION_OFFSET = 120
+    MAX_DETECTION_OFFSET = 120  # in ms
     dt = 1
-    refrac_period = 0
+    refrac_period = 100 # in ms
 
     # Load network
     net = Net().to(device)
@@ -82,9 +82,9 @@ def run_inference(
             fs=30000,
             time_max=time_max,
             overlap=0.5,
-            adapt_threshold=True,
+            adapt_threshold=True if adapt !=0 else False,
             percentile=False,
-            window_size=0.01,
+            window_size=0.1, # 100 ms windows...
             sample_ratio=0.25,
             scaling_factor=1.0,
             refractory=0.0003,
@@ -96,7 +96,9 @@ def run_inference(
 
         # Pass if no ripples...
         if ripples is None or len(ripples) == 0:
+            print("No ripples detected in this session, skipping...")
             pass
+
 
         # GT ripple start in ms
         ripples_start = ripples[:, 0] // 30 - TOLERANCE
@@ -150,9 +152,7 @@ def run_inference(
                     valid_spk = torch.Tensor.bool(spk_out_int & (~refrac_mask))
 
                     if torch.sum(valid_spk) > 0:
-                        
                         lif_out_refrac_times[valid_spk] = float(step_time + refrac_period)
-
                         if active_gts:
                             active_gts.popleft()
                             TP += 1
@@ -187,11 +187,13 @@ def run_inference(
             "channel": channel,
             "spikes": session_spikes,
         }
+        print(f"Session {session} ended. F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, num spikes: {len(session_spikes)}")
 
     if export_spikes:
         curr_dir=os.path.dirname(os.path.abspath(__file__))
         out_dir = os.path.join(curr_dir, "spikes", prefix)
         os.makedirs(out_dir, exist_ok=True)
+        print(f"\nExporting spikes to directory: {out_dir}")
         net_prefix = f"{prefix}_adapt{adapt}" if adapt else prefix
 
         pkl_path = os.path.join(out_dir, f"{net_prefix}_spikes.pkl")

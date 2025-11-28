@@ -17,12 +17,19 @@ if __name__ == "__main__":
     adapt = args.adapt
 
     data_path=r"C:\Madrid_tests"
-    sessions=lists_sessions.annotated_sessions
+    # sessions=lists_sessions.annotated_sessions
+    session_set={"2025-09-22_17-55-26", #R
+                 "2025-09-23_15-50-26", #R
+                 "2025-09-24_10-24-40", #R
+                 "2025-09-24_14-22-55", #H
+                 "2025-09-24_15-13-10", #H
+                 "2025-09-25_16-41-14"} #R
+    
     channel_sessions=lists_sessions.channel_sessions
     run_inference(
             prefix,
             data_path,
-            sessions,
+            session_set,
             channel_sessions=channel_sessions,
             adapt=adapt,
             export_spikes=True,

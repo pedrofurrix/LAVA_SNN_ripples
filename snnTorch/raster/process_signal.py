@@ -1,14 +1,15 @@
 from liset_tk.read_data import read_data
-import os
+# from liset_paper import liset_paper
 from liset_tk.signal_aid import bandpass_filter
-from snnTorch.generalization_madrid.utils import *
+from snnTorch.raster.utils import calculate_threshold, up_down_channel, extract_spikes_downsample
+from visualization import plot_offline_detections
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, original_fs=30000,channel=None,
-                           invert=False,offset=0.16,load_data=True,):
+                           invert=False,offset=0.16,load_data=True,visualize=False,):
     
     try:
         session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
@@ -25,8 +26,10 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
     
     channel_data=liset.data[:,channel-1]
     filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
-    ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
-
+    ripples=liset.annotated.ripples_GT
+    if visualize:
+        plot_offline_detections(liset,ch=channel, filtered=[100,250], title="Filtered Signal with Ground Truth Ripples",
+                                 window=None, plot_offline=False,plot_light=False,plot_predicted=False)
     return filtered_signal, ripples
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 
@@ -38,14 +41,15 @@ def spikify_signal(
     overlap=0.5,
     adapt_threshold=True,
     percentile=False,
-    window_size=0.10,
-    sample_ratio=0.25,
+    window_size=0.01,
+    sample_ratio=0.2,
     scaling_factor=1.0,
     refractory=0,
-    factor=30,
+    factor=1,
     initial_value=None,
+    external_window=None,
     verbose=False,
-    ripples=None,     # kept for compatibility but unused
+    ripples=None,           # for plotting
 ):
 
     N = len(signal)
@@ -53,48 +57,101 @@ def spikify_signal(
     spikified = np.zeros((out_len, 2))
 
     win = int(fs * time_max)
-    step = int(fs * overlap * time_max)
+    step = int(fs * overlap*time_max)
 
-    # -------- THRESHOLD HELPERS --------
+    # ---------------------------
+    # Helper functions
+    # ---------------------------
     def compute_threshold(x):
         return calculate_threshold(x, fs, window_size, sample_ratio, scaling_factor)
 
     def get_threshold_window(signal, t):
-        """Sliding window for adaptive threshold."""
+        """Standard sliding window used when no external_window is given."""
         if t < win:
             return signal[:win]
         else:
             return signal[t - win:t]
 
-    if verbose:
-        print(f"[spikify] N={N}, out_len={out_len}, win={win}, step={step}, factor={factor}")
+    # ---------------------------
+    # If user gives external window → find needed t-values
+    # ---------------------------
+    if external_window is not None:
 
-    # =============================
+        ext_start = int(external_window[0] * fs)
+        ext_end   = int(external_window[1] * fs)
+
+        needed_t = []
+        for t in range(0, N, step):
+            # processing region for this t
+            r_edge = min(t + step, N)
+            if r_edge >= ext_start and t <= ext_end:
+                needed_t.append(t)
+
+        # gather all threshold windows required
+        thr_windows = []
+        for t in needed_t:
+            if t < win:
+                thr_windows.append((0, win))
+            else:
+                thr_windows.append((t - win, t))
+
+        if thr_windows:
+            g_start = min(w[0] for w in thr_windows)
+            g_end   = max(w[1] for w in thr_windows)
+            threshold_base = signal[g_start:g_end]
+            offset = g_start
+        else:
+            threshold_base = signal
+            offset = 0
+
+    else:
+        needed_t = None
+        threshold_base = signal
+        offset = 0
+    
+    if verbose:
+        print(f"spikify_signal: N={N}, out_len={out_len}, win={win}, step={step}, factor={factor}")
+        threshold_base_len = len(threshold_base)
+        print(f"threshold_base length: {threshold_base_len}, offset={offset}")
+        print("Spikifying...")
+    # ============================
     # ADAPTIVE THRESHOLD MODE
-    # =============================
+    # ============================
     if adapt_threshold:
 
         thresholds = []
 
         for t in range(0, N, step):
 
-            # --- sliding threshold window ---
-            tw = get_threshold_window(signal, t)
+            # skip irrelevant t's when external window is used
+            if needed_t is not None and t not in needed_t:
+                continue
 
+            # --- select the correct threshold window ---
+            if needed_t is not None:
+                # compute global window boundaries
+                if t < win:
+                    ws, we = 0, win
+                else:
+                    ws, we = t - win, t
+                # slice from reduced threshold_base
+                tw = threshold_base[max(0,(ws - offset)):(we - offset)]
+            else:
+                tw = get_threshold_window(signal, t)
+
+            # --- threshold computation ---
             thr = compute_threshold(tw)
             thresholds.append(thr)
 
-            # --- extract chunk ---
+            # --- spiking ---
             r_edge = min(t + step, N)
             chunk = signal[t:r_edge]
 
-            # --- spiking ---
             spk, initial_value = up_down_channel(
                 chunk, thr, fs, refractory,
                 initial_value=initial_value, return_value=True
             )
 
-            # Downsample spikes if using factor
             if factor > 1:
                 spk, _ = extract_spikes_downsample(spk, factor)
 
@@ -102,16 +159,31 @@ def spikify_signal(
             R = r_edge // factor
             spikified[L:R] = spk
 
+        if external_window is not None:
+            left= ext_start // factor
+            right= ext_end // factor
+            spikified = spikified[left:right]
+            
+        # plot_signal_spikes(
+        #         signal[ext_start:ext_end] if external_window is not None else signal,
+        #         spikified,
+        #         fs_signal=30000,
+        #         fs_spikes=1000,
+        #         ripples=ripples,
+        #         window=external_window,
+        #         ripple_color="yellow",
+        #         ripple_alpha=0.5,
+        #         figsize=(15,5)
+        #     )
+        
         if verbose:
             print("Spikification complete.")
-            print(f"UP spikes:   {np.sum(spikified[:,0])}")
-            print(f"DOWN spikes: {np.sum(spikified[:,1])}")
-
+            print(f"Number of UP spikes: {np.sum(spikified[:,0])} ,\nNumber of DOWN spikes: {np.sum(spikified[:,1])}")
         return spikified, thresholds
 
-    # =============================
-    # FIXED THRESHOLD MODE
-    # =============================
+        # ============================
+        # FIXED THRESHOLD MODE
+        # ============================
     else:
         thr = compute_threshold(signal[:win])
 
@@ -120,9 +192,13 @@ def spikify_signal(
 
         if factor > 1:
             spk, _ = extract_spikes_downsample(spk, factor)
+        
+        if external_window is not None:
+            left= ext_start // factor
+            right= ext_end // factor
+            spk = spk[left:right]
 
-        return spk, thr
-
+        return spk,thr
 
 
 def plot_signal_spikes(
@@ -134,7 +210,8 @@ def plot_signal_spikes(
     window=None,
     ripple_color="yellow",
     ripple_alpha=0.25,
-    figsize=(15,5)
+    figsize=(15,5),
+    ax=None,
 ):
     """
     signal:      filtered LFP already aligned to window (shape N)
@@ -157,12 +234,16 @@ def plot_signal_spikes(
     t_sig_ms = t_sig * 1000
     t_spk_ms = t_spk * 1000
 
-    plt.figure(figsize=figsize)
+    # If an axis was provided, use it; otherwise create a figure/axis
+    created_fig = False
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
+        created_fig = True
 
     # ------------------------------------------------------
     # Plot the LFP signal
     # ------------------------------------------------------
-    plt.plot(t_sig_ms, signal, color="black", lw=0.8, label="Filtered LFP")
+    ax.plot(t_sig_ms, signal, color="black", lw=0.8, label="Filtered LFP")
 
     # ------------------------------------------------------
     # Plot UP/DOWN spikes (already aligned)
@@ -174,9 +255,9 @@ def plot_signal_spikes(
     ymax = np.max(signal)
     ymin= np.min(signal)
 
-    plt.vlines(up_times, ymax*0.75, ymax*1, color="red", lw=1, label="UP")
+    ax.vlines(up_times, ymax*0.75, ymax*1, color="red", lw=1, label="UP")
 
-    plt.vlines(dn_times, ymin, ymin*0.75, color="blue", lw=1,label="DOWN")
+    ax.vlines(dn_times, ymin, ymin*0.75, color="blue", lw=1,label="DOWN")
 
     # ------------------------------------------------------
     # Plot ripples (now relative to window start)
@@ -198,7 +279,7 @@ def plot_signal_spikes(
         rs_ms = (r_start - w_start) * 1000
         re_ms = (r_end   - w_start) * 1000
 
-        plt.axvspan(
+        ax.axvspan(
             rs_ms, re_ms,
             color=ripple_color,
             alpha=ripple_alpha,
@@ -208,10 +289,11 @@ def plot_signal_spikes(
     # ------------------------------------------------------
     # Formatting
     # ------------------------------------------------------
-    plt.xlabel("Time (ms, relative to window start)")
-    plt.ylabel("Filtered LFP amplitude")
-    plt.title("Signal + UP/DN Spikes + Ripples")
-    plt.legend()
-    plt.tight_layout()
-    plt.show(block=False)
-    plt.xlim(0, (w_end - w_start)*1000)  # in ms
+    ax.set_xlabel("Time (ms, relative to window start)")
+    ax.set_ylabel("Filtered LFP amplitude")
+    ax.set_title("Signal + UP/DN Spikes + Ripples")
+    ax.legend()
+    if created_fig:
+        ax.figure.tight_layout()
+        plt.show(block=False)
+    ax.set_xlim(0, (w_end - w_start)*1000)  # in ms
