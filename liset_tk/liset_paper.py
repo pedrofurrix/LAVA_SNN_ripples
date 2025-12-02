@@ -24,10 +24,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat
 from copy import deepcopy
-from format_predictions import get_predictions_indexes
-from liset_aux import *
-from load_data import *
-from signal_aid import *
+from liset_tk.format_predictions import get_predictions_indexes
+from liset_tk.liset_aux import *
+from liset_tk.load_data import *
+from liset_tk.signal_aid import *
 
 
 
