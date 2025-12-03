@@ -10,7 +10,7 @@ curr_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(curr_dir, os.pardir, os.pardir))
 sys.path.append(project_root)
 
-from snnTorch.generalization_madrid.process_signal import load_experimental_data
+from snnTorch.retry_live_val.process_signal import load_experimental_data
 
 def compute_metrics_single_channel(
     spikes_ms, 
@@ -61,7 +61,7 @@ def compute_metrics_single_channel(
     
     # Sort spikes
     spikes_ms = np.sort(spikes_ms)
-    
+    print("Length spikes:", len(spikes_ms), "Length ripples:", len(ripples_ms))
     tp_count = 0
     fn_count = 0
     latencies = []
@@ -145,7 +145,8 @@ def process_live_results(
         spikes = np.array(data['spikes']) # List of times in ms
         
         print(f"Processing session: {session} (Channel {channel})")
-        
+        path_data=os.path.join(data_path, session)
+        print(f"  Data path: {path_data}")
         # Load GT ripples
         # We use load_experimental_data to get ripples. 
         # Note: This loads the signal too, which might be slow.
@@ -153,11 +154,12 @@ def process_live_results(
             # Suppress stdout from load_experimental_data if verbose
             # sys.stdout = open(os.devnull, 'w') 
             _, ripples = load_experimental_data(
-                data_path,
-                session,
+                path=path_data,
                 channel=channel,
                 load_data=False, 
-                verbose=False
+                verbose=True,
+                downsample=False,
+                fraction=(0.8,1)
             )
             # sys.stdout = sys.__stdout__
         except Exception as e:
@@ -169,7 +171,8 @@ def process_live_results(
         else:
             # Ripples are in 30kHz samples. Convert to ms.
             ripples_ms = ripples / 30.0
-            
+            print(f"Ripples shape:{ripples_ms.shape}")
+
         # Compute metrics
         tp, fp, fn, latencies = compute_metrics_single_channel(
             spikes, 
@@ -215,8 +218,8 @@ def process_live_results(
 if __name__ == "__main__":
     # Configuration
     # Path to the directory containing spike pickle files (searches recursively)
-    SPIKES_ROOT = os.path.join(project_root, "snnTorch", "generalization_madrid", "spikes")
-    DATA_PATH = r"C:\Madrid_tests" # Update this if different
+    SPIKES_ROOT = os.path.join(project_root, "snnTorch", "retry_live_val", "spikes")
+    DATA_PATH = r"C:\Download_from_paper" # Update this if different
     OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics.csv")
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
@@ -247,9 +250,9 @@ if __name__ == "__main__":
                         pkl_path,
                         DATA_PATH,
                         tolerance=20,
-                        max_detection_offset=100,
-                        fp_grouping_window=100,
-                        extra_tolerance=100,
+                        max_detection_offset=100, #100
+                        fp_grouping_window=100, #100
+                        extra_tolerance=100, #100
                         output_csv=None, # Don't save individual CSVs
                         network_name=net_name,
                         adapt=adapt

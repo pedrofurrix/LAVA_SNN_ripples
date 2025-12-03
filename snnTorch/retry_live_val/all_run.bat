@@ -1,8 +1,4 @@
 @echo off 
-C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_15f --adapt 0
-C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_15f --adapt 120
-C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_15f --adapt 20
-C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_15f --adapt 2
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_11b --adapt 0
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_11b --adapt 120
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/retry_live_val/batchrun.py --prefix dsb4updn_median_200_11b --adapt 20

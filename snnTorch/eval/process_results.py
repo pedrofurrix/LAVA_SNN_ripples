@@ -59,7 +59,7 @@ def process_network_results(
                     valid.append(spike)
             filtered_spikes.append(np.array(valid))
 
-        ripples_start = ripples[:, 0] - tolerance
+        ripples_start = ripples[:, 0] # - tolerance # GT ripple start in ms - tolerance already applied below
         ripple_hits = {}
         undetected_ripples = []
         latencies = []
@@ -67,8 +67,8 @@ def process_network_results(
         for idx, ripple_time in enumerate(ripples_start):
             detected_channels = set()
             for ch in range(num_channels):
-                valid_window_start = ripple_time - tolerance
-                valid_window_end = ripple_time + max_detection_offset + tolerance
+                valid_window_start = ripple_time - tolerance 
+                valid_window_end = ripple_time + max_detection_offset # + tolerance - before
                 ch_spikes = filtered_spikes[ch]
                 in_window = np.any((ch_spikes >= valid_window_start) & (ch_spikes <= valid_window_end))
                 if in_window:
@@ -82,7 +82,7 @@ def process_network_results(
 
         # Collect false positives
         valid_detection_ranges = [
-            (r[0] - tolerance, r[0] + max_detection_offset + tolerance + padding) for r in ripples
+            (r[0] - tolerance, r[0] + max_detection_offset + padding) for r in ripples
         ]
 
         def is_tp(spike_time, valid_ranges):

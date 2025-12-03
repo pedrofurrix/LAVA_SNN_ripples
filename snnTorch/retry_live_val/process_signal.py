@@ -9,18 +9,37 @@ import numpy as np
 
 def load_experimental_data(path, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, original_fs=30000,channel=None,
-                           invert=False,offset=0.16,load_data=True,):
+                           invert=False,offset=0.16,load_data=True,fraction=(0,1)):
     
     # determine invert rule
     
-    liset = liset_paper(path, shank=1, downsample=downsample, start=start, verbose=verbose)
+    liset = liset_paper(path, shank=1, downsample=downsample, start=start, verbose=verbose,load_data=load_data,normalize=normalize)
     
-    filtered_signal = None
+    filtered_signal = []
     if load_data:
         channel_data=liset.data[:,channel-1]
         filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
+    
     ripples=liset.ripples_GT #original frequency - 30000 Hz
+    # print(f"Ripples shape:{ripples.shape}")
 
+
+    if fraction != (0,1):
+        total_samples=getattr(liset,'file_samples',None)
+        if total_samples is None:
+            print("⚠️ Warning: total_samples unknown, cannot apply fraction slicing to ripples.")
+        # Use only the last 20%
+        n_end = total_samples * fraction[1]
+        n_start = total_samples * fraction[0]
+        
+        # Filter rows based on start time
+        mask = (ripples[:, 0] >= n_start) & (ripples[:, 0] < n_end)
+        ripples = ripples[mask]
+        
+        # Adjust to new start (only time columns)
+        ripples[:, :2] = ripples[:, :2] - n_start
+        filtered_signal = filtered_signal[int(n_start):int(n_end)]
+        # print(f"  Applied fraction slicing: {fraction}, total_samples: {total_samples}, new ripples shape: {ripples.shape}")
     return filtered_signal, ripples
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 

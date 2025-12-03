@@ -45,7 +45,7 @@ class liset_paper():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
      
-    def __init__(self, data_path, shank, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000):
+    def __init__(self, data_path, shank, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,load_data=True):
 
         # Set the verbose
         self.verbose = verbose
@@ -58,14 +58,19 @@ class liset_paper():
         else:
             self.fs_conv_fact = 1
 
+        self.fs=self.original_fs if not downsample else self.downsampled_fs
+
         # Initialize class variables.
         self.prediction_times = []
         self.model = None
         self.default_channels = [16, 4, 1, 13, 15, 3, 2, 14]
-
+        
         # Load the data.
-        self.load(data_path, shank, downsample = downsample, normalize=normalize)
-
+        if load_data:
+            self.load(data_path, shank, downsample = downsample, normalize=normalize)
+        else:
+            self.file_samples = self.get_file_samples(data_path) # get file samples without loading data
+        
         # Try to load the ripples if the path contain a file with ripple times.
         # Only load ripples in the interval selected of data (chunk)
         if hasattr(self, 'fs'):
@@ -240,12 +245,35 @@ class liset_paper():
 
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
-            numSamples = self.file_samples - self.start
+            numSamples = self.file_samples-start
 
         in_chunk = ripples[(ripples[:,0] > start) & (ripples[:,0] < (start + numSamples))]
 
         return in_chunk
 
+    def get_file_samples(self, path): # added method for getting total samples in .dat file without loading all data
+        """
+        Get the total number of samples in the .dat file.
+
+        Parameters:
+        - path (str): Path to the directory containing the .dat file.
+
+        Returns:
+        - file_samples (int): Total number of samples in the .dat file.
+        """
+        try:
+            filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
+            file_len = os.path.getsize(filename=filename)
+            # print(filename)
+            num_channels_raw = 8
+            file_samples = file_len / num_channels_raw / 2
+            if self.verbose:
+                print(f'Total file samples: {file_samples}')
+            return file_samples    
+        except:
+            if self.verbose:
+                print('.dat file not in path')
+            return False
 
     def load_dat(self, path, channels, numSamples = False, verbose=False):
         """
@@ -386,99 +414,6 @@ class liset_paper():
      
         return data
 
-
-    def load_model(self, model_path, y_samples=50):
-        """
-        Load a trained tf.keras model from the specified path.
-
-        Parameters:
-        - model_path (str): Path to the saved model file.
-
-        Returns:
-        - None
-        """
-        if self.verbose:
-            print("Loading model...", end=" ")
-
-        if model_path.endswith('.pt'):
-            self.model = torchSNN(model_path)
-            self.model_type='SNN'
-
-        else:
-            optimizer = kr.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-07, amsgrad=False)
-            model = kr.models.load_model(model_path, compile=False)
-            model.compile(loss="binary_crossentropy", optimizer=optimizer)
-            self.model = model
-            self.model_type = 'CNN'
-
-            # Try to get the input shape of the model, otherwise most probable is 0.0128.
-            try:
-                self.model_window_for_input = self.model.input_shape[1] / self.fs
-            except:
-                self.model_window_for_input = 0.0128
-
-        if self.verbose:
-            print("\nRunning on: ", "CPU" if not tf.config.experimental.list_physical_devices('GPU') else "GPU")
-            print("Done!")
-
-
-
-    def predict(self, threshold = 0.7, channel=5):
-        """
-        Predict events in the data using the loaded model.
-
-        Parameters:
-        - threshold (float, optional): Threshold for event prediction confidence. Default is 0.7.
-
-        Returns:
-        - None
-        """
-        if self.model_type == 'SNN':
-            input = y_discretize_1Dsignal(bandpass_filter(self.data[:, channel], [100, 250], self.fs), 50)
-            output = self.model(input)
-            self.prediction_idxs = detect_rate_increase(output)
-            self.prediction_times = self.prediction_idxs / self.fs
-
-        elif self.model_type == 'CNN':
-            window = self.model_window_for_input
-            X = generate_overlapping_windows(self.data, window, window/2, self.fs)
-            raw_predictions = self.model.predict(X, verbose=self.verbose)
-            self.prediction_idxs = merge_overlapping_intervals(get_predictions_indexes(raw_predictions, window, window/2, self.fs, threshold))
-            self.prediction_times = self.prediction_idxs / self.fs
-
-            if len(self.prediction_times) > 0:
-                self.has_ripples = True 
-
-        else:
-            print('No model loaded.')
-            return
-        
-
-    def evaluate(self, preds=None, chart=True, model_type=''):
-        """
-        Evaluate the performance of the model on the loaded data.
-
-        Parameters:
-        - threshold (float, optional): Threshold for event prediction confidence. Default is 0.7.
-
-        Returns:
-        - None
-        """
-        validate = modelEval(self.ripples_GT, self.model_type if model_type == '' else model_type)
-        if hasattr(self, 'prediction_idxs') and preds is None:
-            validate(self.prediction_idxs, chart=chart)
-        elif preds is not None:
-            validate(preds, chart=chart)
-        else:
-            print('No predictions available.')
-
-    
-    def savefig(self, fname, background=False):
-        if fname.endswith('.svg'):
-            self.fig.savefig(fname, transparent=not background, format='svg', bbox_inches='tight')
-        else:
-            self.fig.savefig(fname, transparent=not background, bbox_inches='tight')
-                
     @plain_plot
     @hide_y_ticks_on_offset
     def downsample_several(self,event, 

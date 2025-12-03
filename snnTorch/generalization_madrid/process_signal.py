@@ -8,7 +8,7 @@ import numpy as np
 
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, original_fs=30000,channel=None,
-                           invert=False,offset=0.16,load_data=True,):
+                           invert=False,offset=0.16,load_data=True):
     
     try:
         session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
