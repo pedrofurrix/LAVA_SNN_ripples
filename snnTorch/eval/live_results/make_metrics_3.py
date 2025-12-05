@@ -1,8 +1,8 @@
 import os
 import pickle
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
+from sklearn.metrics import cohen_kappa_score
 
 def compute_dataset_metrics(info, min_channels=3):
     ripple_hits = info["ripple_hits"]
@@ -24,36 +24,15 @@ def compute_dataset_metrics(info, min_channels=3):
         "Precision": precision, "Recall": recall, "F1": f1
     }
 
-def process_all_networks(metrics_dict_by_network,):
-    all_data = []
-    for network_name, datasets in metrics_dict_by_network.items():
-        for dataset_name, info in datasets.items():
-            channel_metrics = compute_dataset_metrics(info,)
-            entry = {
-                "Network": network_name,
-                "Dataset": dataset_name,
-                **channel_metrics
-            }
-            all_data.append(entry)
-    return pd.DataFrame(all_data)
-
-
-
-from sklearn.metrics import cohen_kappa_score
-
-def compute_channel_wise_kappa_with_fp(info, num_channels=8,min_channels=3):
+def compute_channel_wise_kappa_with_fp(info, num_channels=8, min_channels=3):
     ripple_hits = info["ripple_hits"]
-    undetected_ripples = info["undetected_ripples"]
     fp_spikes_by_channel = info["fp_spikes_by_channel"]
 
-    results={}
-
     # Number of ripples (positive samples)
-    n_pos = len(ripple_hits)
+    # n_pos = len(ripple_hits)
 
     # Number of negatives - max number of FP spikes across all channels (to balance samples)
-    n_neg = sum(1 for v in fp_spikes_by_channel.values() if len(v)>=min_channels) if fp_spikes_by_channel else 0
-
+    n_neg = sum(1 for v in fp_spikes_by_channel.values() if len(v) >= min_channels) if fp_spikes_by_channel else 0
 
     gt_vector = []
     pred_vector = []
@@ -61,13 +40,12 @@ def compute_channel_wise_kappa_with_fp(info, num_channels=8,min_channels=3):
     # Positive samples
     for ripple_id in sorted(ripple_hits.keys()):
         gt_vector.append(1)
-        pred_vector.append(1 if len(ripple_hits[ripple_id])>=3 else 0)
+        pred_vector.append(1 if len(ripple_hits[ripple_id]) >= min_channels else 0)
 
     # Negative samples
-    # fp_spikes = fp_spikes_by_channel.get(ch, [])
     for i in range(n_neg):
         gt_vector.append(0)
-        pred_vector.append(1)
+        pred_vector.append(1) # These are FPs, so Ground Truth is 0, Prediction is 1 (detected)
 
     # Calculate Cohen's kappa if there is variance
     if len(set(gt_vector)) > 1 and len(set(pred_vector)) > 1:
@@ -75,51 +53,69 @@ def compute_channel_wise_kappa_with_fp(info, num_channels=8,min_channels=3):
     else:
         kappa = np.nan
 
-
     return kappa
 
-def process_all_networks_with_kappa(metrics_dict_by_network, num_channels=8):
+def process_all_results(all_results, min_channels=3):
     all_data = []
-    for network_name, datasets in metrics_dict_by_network.items():
-        for dataset_name, info in datasets.items():
-            # Compute existing metrics (precision, recall, F1)
-            # Compute Cohen's kappa per channel
-            dataset_kappa = compute_channel_wise_kappa_with_fp(info, num_channels=num_channels)
-            entry = {
-                "Network": network_name,
-                "Dataset": dataset_name,
-                "Cohen_Kappa": dataset_kappa
-            }
-            all_data.append(entry)
+    
+    # The structure is { adapt: { network: { dataset: info } } }
+    
+    for adapt, networks_data in all_results.items():
+        print(f"Processing adapt: {adapt}")
+        if not isinstance(networks_data, dict):
+            continue
+            
+        for network_name, datasets in networks_data.items():
+            for dataset_name, info in datasets.items():
+                # Metrics
+                metrics = compute_dataset_metrics(info, min_channels=min_channels)
+                entry = {
+                    "Session": dataset_name,
+                    "Network": network_name,
+                    "ADAPT": adapt,
+                    "Kappa": compute_channel_wise_kappa_with_fp(info, min_channels=min_channels),
+                    **metrics
+                }
+                all_data.append(entry)
+                
+                
     return pd.DataFrame(all_data)
+if __name__ == "__main__":
+    # Configuration matching results_processor.py
+    tolerance = 20
+    padding = 100
+    max_detection_offset = 100
+    jitter = 100
+    
+    # Path to the pickle file
+    results_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Filename pattern from results_processor.py
+    filename = f"all_network_results_tol{tolerance}_ma{max_detection_offset}_jit{jitter}_pa{padding}.pkl"
+    path_file = os.path.join(results_dir, filename)
+    
+    print(f"Loading results from: {path_file}")
+    
+    if not os.path.exists(path_file):
+        print(f"File not found: {path_file}")
+        print("Please run snnTorch/eval/results_processor.py first to generate the pickle file.")
+    else:
+        with open(path_file, "rb") as f:
+            all_results = pickle.load(f)
 
+        # --- PROCESS METRICS ---
+        metrics_df = process_all_results(all_results, min_channels=3)
 
-
-# --- LOAD THE .pkl FILE GENERATED PREVIOUSLY ---
-adapt=20
-test_ds_b4=False
-if test_ds_b4:
-    identifier=f"testing_dsb4_adaptable{adapt}" if adapt > 0 else "testing_dsb4"
-else:
-    identifier=f"30000_1000_100_adaptable{adapt}" if adapt > 0 else "30000_1000_100"
-    # identifier="1000_200_median"
-filename=f"all_network_results_{identifier}.pkl"
-path_file=os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
-
-with open(path_file, "rb") as f:
-    all_networks_info = pickle.load(f)
-
-# --- PROCESS METRICS FOR EACH NETWORK ---
-metrics_df = process_all_networks(all_networks_info)
-metrics_dfk =process_all_networks_with_kappa(all_networks_info)
-
-# --- SAVE TO CSV FOR FUTURE USE ---
-metrics_dir= os.path.join(os.path.dirname(os.path.abspath(__file__)), "metrics")
-os.makedirs(metrics_dir, exist_ok=True)
-filename= f"channel_metrics_by_network_{identifier}_3.csv"
-metrics_df.to_csv(os.path.join(metrics_dir, filename), index=False)
-
-
-
-filename= f"channel_kappa_by_network_{identifier}_3.csv"
-metrics_dfk.to_csv(os.path.join(metrics_dir, filename), index=False)
+        # --- SAVE TO CSV ---
+        metrics_dir = os.path.join(results_dir, "metrics")
+        os.makedirs(metrics_dir, exist_ok=True)
+        
+        output_csv = os.path.join(metrics_dir, "parallel_metrics_all_adapts.csv")
+        metrics_df.to_csv(output_csv, index=False)
+        print(f"Metrics saved to {output_csv}")
+        
+        # Print summary
+        if not metrics_df.empty:
+            print("\n--- Summary by Network and Adapt (Parallel) ---")
+            summary = metrics_df.groupby(["Network", "ADAPT"])[["F1", "Precision", "Recall"]].mean()
+            print(summary)

@@ -48,6 +48,7 @@ if __name__ == "__main__":
         # convert to float
         window = [float(p) for p in parts if p != ""]
 
+    plt.close('all')
     spk,thr=spikify_signal( # Something really weird here
     signal,
     fs=fs,
