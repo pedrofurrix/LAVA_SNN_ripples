@@ -198,6 +198,17 @@ def run_inference(
 
         pkl_path = os.path.join(out_dir, f"{net_prefix}_spikes.pkl")
 
+        # Check if file exists and append if so
+        if os.path.exists(pkl_path):
+            print(f"Appending to existing file: {pkl_path}")
+            try:
+                with open(pkl_path, "rb") as f:
+                    existing_data = pkl.load(f)
+                existing_data.update(all_spikes)
+                all_spikes = existing_data
+            except Exception as e:
+                print(f"Could not load existing file {pkl_path}, overwriting. Error: {e}")
+
         with open(pkl_path, "wb") as f:
             pkl.dump(all_spikes, f, protocol=pkl.HIGHEST_PROTOCOL)
 

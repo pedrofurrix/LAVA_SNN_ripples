@@ -6,6 +6,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
+from scipy.signal import butter, filtfilt, hilbert
+
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, original_fs=30000,channel=None,
                            invert=False,offset=0.16,load_data=True):
@@ -126,6 +128,60 @@ def spikify_signal(
         return spk, thr
 
 
+def ripple_band_power_trace(signal, fs, bandpass=(100, 250), smooth_ms=10, log_power=False,zscore=False):
+    """
+    Compute continuous ripple-band power over time.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        1D LFP trace.
+    fs : float
+        Sampling frequency (Hz).
+    ripple_band : tuple
+        Ripple frequency range (e.g., (120, 250)).
+    smooth_ms : float
+        Window for moving average smoothing (in milliseconds).
+    log_power : bool
+        If True, return log10(power) instead of linear power.
+
+    Returns
+    -------
+    power_trace : np.ndarray
+        Ripple-band power time series (same length as signal).
+    """
+
+    # Bandpass filter
+    # nyq = fs / 2
+    # b, a = butter(4, [bandpass[0]/nyq, bandpass[1]/nyq], btype='band')
+    # filtered = filtfilt(b, a, signal)
+    filtered=signal  # Already filtered
+    # Hilbert transform to get analytic envelope
+    analytic = hilbert(filtered)
+    envelope = np.abs(analytic)
+
+    # Compute power
+    power = envelope ** 2
+    if log_power:
+        power = np.log10(power + 1e-12)
+
+     # ----- Optional z-score normalization -----
+    if zscore:
+        mu = np.mean(power)
+        sigma = np.std(power)
+        if sigma > 0:
+            power = (power - mu) / sigma
+        else:
+            power = power - mu   # avoid division by zero
+            
+    # 4 Smooth (optional)
+    if smooth_ms > 0:
+        win_samples = int(fs * smooth_ms / 1000)
+        if win_samples > 1:
+            kernel = np.ones(win_samples) / win_samples
+            power = np.convolve(power, kernel, mode='same')
+
+    return power
 
 def plot_signal_spikes(
     signal,
