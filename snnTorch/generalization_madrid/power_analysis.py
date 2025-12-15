@@ -49,6 +49,7 @@ def extract_events(spikes_ms, ripples_samp, fs=30000, tolerance_ms=20, max_offse
     
     # 1. Find TPs and FNs
     for r_idx, (w_start, w_end, r_start, r_end) in enumerate(ripple_windows):
+        
         # Find spikes in window
         idx_start = np.searchsorted(sorted_spikes, w_start)
         idx_end = np.searchsorted(sorted_spikes, w_end)
@@ -110,35 +111,47 @@ def extract_events(spikes_ms, ripples_samp, fs=30000, tolerance_ms=20, max_offse
             
     return tp_events, fp_events, fn_events
 
-def extract_power_snippets(power_trace, events, event_type, window_samp):
+def extract_power_snippets(power_trace, events, event_type, window_samp, look_around=3000, center="peak"):
     snippets = []
     max_idx = len(power_trace)
     
     for ev in events:
         center_idx = 0
         
-        if event_type == 'TP':
-            center_idx = ev['spike_samp']
-        elif event_type == 'FP':
-            center_idx = ev['spike_samp']
-        elif event_type == 'FN':
-            # Find peak power in ripple interval
-            r_start = int(ev['ripple_start'])
-            r_end = int(ev['ripple_end'])
-            
-            # Clamp
-            r_start = max(0, r_start)
-            r_end = min(max_idx, r_end)
-            
-            if r_end > r_start:
-                ripple_power = power_trace[r_start:r_end]
-                if len(ripple_power) > 0:
-                    peak_offset = np.argmax(ripple_power)
-                    center_idx = r_start + peak_offset
+        if center == "peak":
+            if event_type == 'FP':
+                # find peak power around the event
+                center_idx = ev['spike_samp']
+                snippet_around=power_trace[center_idx-look_around:center_idx+look_around] # 100 ms forward and back
+                rel_idx=np.argmax(snippet_around)
+                center_idx=center_idx+rel_idx-look_around
+            else:
+                # TP or FN: Find peak power in ripple interval
+                r_start = int(ev['ripple_start'])
+                r_end = int(ev['ripple_end'])
+                
+                # Clamp
+                r_start = max(0, r_start)
+                r_end = min(max_idx, r_end)
+                
+                if r_end > r_start:
+                    ripple_power = power_trace[r_start:r_end]
+                    if len(ripple_power) > 0:
+                        peak_offset = np.argmax(ripple_power)
+                        center_idx = r_start + peak_offset
+                    else:
+                        center_idx = r_start
                 else:
                     center_idx = r_start
+        else:
+            # Center on event (spike or middle of ripple)
+            if event_type == 'FN':
+                r_start = int(ev['ripple_start'])
+                r_end = int(ev['ripple_end'])
+                center_idx = int((r_start + r_end) / 2)
             else:
-                center_idx = r_start
+                # TP or FP
+                center_idx = ev['spike_samp']
                 
         # Extract window
         start = center_idx - window_samp
@@ -156,11 +169,13 @@ def run_power_analysis():
     os.makedirs(DATA_ROOT, exist_ok=True)
     DATA_PATH = r"C:\Madrid_tests"
     OUTPUT_FILE = os.path.join(SPIKES_ROOT, "power_analysis_results.pkl")
-    
+    center="peak"
     # Analysis parameters
     WINDOW_MS = 100 # +/- 100ms
     FS = 30000
     WINDOW_SAMP = int(WINDOW_MS * FS / 1000)
+    SESSIONS_TO_EXCLUDE={"2025-09-24_16-29-07", #R   
+        "2025-09-24_17-38-17",} #R 
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
     
@@ -190,6 +205,10 @@ def run_power_analysis():
                     
                     # Iterate over sessions
                     for session, data in tqdm(all_spikes.items(), desc="Sessions"):
+                        if session in SESSIONS_TO_EXCLUDE:
+                            print(f"  Skipping excluded session: {session}")
+                            continue
+
                         channel = data['channel']
                         spikes_ms = np.array(data['spikes'])
                         
@@ -201,7 +220,7 @@ def run_power_analysis():
                                 channel=channel,
                                 load_data=True,
                                 verbose=False,
-                                normalize=True
+                                normalize=False
                             )
                         except Exception as e:
                             print(f"  Error loading data for {session}: {e}")
@@ -212,19 +231,19 @@ def run_power_analysis():
                             
                         # Compute Power Trace
                         # filtered_signal is already 100-250Hz
-                        power_trace = ripple_band_power_trace(filtered_signal, FS, smooth_ms=0, zscore=False)
+                        power_trace = ripple_band_power_trace(filtered_signal, FS, smooth_ms=0, zscore=True)
                         
                         # Extract Events
                         # ripples from load_experimental_data are in samples (30kHz)
                         tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=FS)
                         
                         # Extract Snippets
-                        tp_snips = extract_power_snippets(power_trace, tp_ev, 'TP', WINDOW_SAMP)
-                        fp_snips = extract_power_snippets(power_trace, fp_ev, 'FP', WINDOW_SAMP)
-                        fn_snips = extract_power_snippets(power_trace, fn_ev, 'FN', WINDOW_SAMP)
+                        tp_snips = extract_power_snippets(power_trace, tp_ev, 'TP', WINDOW_SAMP,center=center,look_around=WINDOW_SAMP)
+                        fp_snips = extract_power_snippets(power_trace, fp_ev, 'FP', WINDOW_SAMP,center=center,look_around=WINDOW_SAMP)
+                        fn_snips = extract_power_snippets(power_trace, fn_ev, 'FN', WINDOW_SAMP,center=center,look_around=WINDOW_SAMP)
                         
                         # Store (downsample to save space? maybe 1000Hz?)
-                        # Let's downsample by factor of 30 (30kHz -> 1kHz)
+                        # Let's downsample by factor of 3 (30kHz -> 10kHz)
                         factor = 3
                         
                         all_power_data[key]['TP'].extend([s[::factor] for s in tp_snips])
@@ -232,6 +251,9 @@ def run_power_analysis():
                         all_power_data[key]['FN'].extend([s[::factor] for s in fn_snips])
 
     # Save results
+    filename=f"power_analysis_results_center_{center}.pkl"
+    OUTPUT_FILE = os.path.join(DATA_ROOT, filename)
+
     print(f"\nSaving results to {OUTPUT_FILE}...")
     with open(OUTPUT_FILE, "wb") as f:
         pickle.dump(all_power_data, f)
