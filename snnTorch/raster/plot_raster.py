@@ -93,6 +93,7 @@ def plot_raster(
                 color=color,
                 label=label if neuron_idx == 0 else None
             )
+           
 
         y_offset += len(per_neuron_lists) + 1  # spacing
 
@@ -139,3 +140,5 @@ def plot_raster(
         ax.figure.tight_layout()
         if ax is None:
             plt.show()
+
+    return ax

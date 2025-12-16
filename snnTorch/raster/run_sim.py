@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 sessions_channels=lists_sessions.channel_sessions
 if __name__ == "__main__":
 
-    path=r"C:\Madrid_tests"
+    path=r"D:\Madrid_tests"
     name="2025-09-24_15-13-10"
     downsample=False
     normalize=False
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # spk[10,0]=1
     # spk[20,1]=1
 
-    prefix = "updnb4ds_100_7"
+    prefix = "updnb4ds_100_13b"
     res = run_network(spk, prefix, export_spikes=False)
 
     # Create a shared-x figure: top = filtered signal + up/dn spikes, bottom = raster
@@ -94,11 +94,13 @@ if __name__ == "__main__":
     )
 
     # Bottom: raster. Pass up_dn_spikes as the spikified input so UP/DN appear too.
-    plot_raster(lif1_spikes=res['lif1'], lif2_spikes=res['lif2'], lif_out_spikes=res['out'], up_dn_spikes=spk,
+    ax=plot_raster(lif1_spikes=res['lif1'], lif2_spikes=res['lif2'], lif_out_spikes=res['out'], up_dn_spikes=spk,
                 labels=("UP_DN", "LIF1", "LIF2", "LIF_OUT"), window=window, ripples=ripple_seconds,
                 colors=None, figsize=(10,5), ax=axes[1])
 
     plt.tight_layout()
     plt.show()
+    fig.savefig(os.path.join(curr_dir, f"raster_{name}.svg"), dpi=300)
 
 # WINDOW USED - 162,166
+# 100-150 is good - but change titles and stuff
