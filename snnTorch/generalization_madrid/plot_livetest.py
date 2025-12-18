@@ -267,7 +267,7 @@ if __name__ == "__main__":
     data_path=r"C:\Madrid_tests"
     spikes_dir=os.path.join(os.path.dirname(__file__), "spikes")
     network="updnb4ds_100_7"
-    adapt=0
+    adapt=20
     spikes_path=os.path.join(spikes_dir,network, f"{network}_adapt{adapt}_spikes.pkl" if adapt else f"{network}_spikes.pkl")
     plot_single_channel_performance(
     session,
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     data_path=data_path,
     window=None,
     tolerance=0.02,
-    max_detection_offset=0.1,
+    max_detection_offset=0.12,
     fp_grouping_window=0.1,
     filename=None,
     extra_tolerance=0.1,
