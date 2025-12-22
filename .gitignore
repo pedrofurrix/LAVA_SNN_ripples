@@ -2,3 +2,4 @@ extract_Nripples/__pycache__/utils_encoding.cpython-39.pyc
 /extract_Nripples/__pycache__
 snnTorch/eval/live_results/all_network_results_tol20_ma100_jit100_pa100.pkl
 snnTorch/generalization_madrid/data/power_analysis_results_center_peak.pkl
+/snnTorch/generalization_madrid/figures
