@@ -42,7 +42,7 @@ class read_data():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
 
-    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channel_num=None,invert=False,offset=0.16,buffer_size=20,load_data=True):
+    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channel_num=None,invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None):
         
         self.oe_path=os.path.join(data_path,"Open Ephys",name)
         self.annotation_path=os.path.join(data_path,"annotations")
@@ -58,7 +58,7 @@ class read_data():
         self.from_data=RippleEvents(offset=offset)
         self.normalize=normalize
         self.name=name
-
+        self.channels=channels
         if downsample:
             self.downsampled_fs = downsample
             self.fs_conv_fact = self.original_fs/self.downsampled_fs
@@ -73,7 +73,7 @@ class read_data():
 
         # Load the data.
         if load_data:
-            self.load(self.oe_path, shank, downsample = downsample, normalize=normalize,invert=invert)
+            self.load(self.oe_path, shank, downsample = downsample, normalize=normalize,invert=invert, channels=channels)
         else:
             self.load_only_ripples(self.oe_path,invert=invert)    
 
@@ -104,11 +104,10 @@ class read_data():
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
             numSamples = self.file_samples - self.start
-        if ripples is not None and ripples.shape[0]>0:
-            in_chunk = ripples[(ripples[:,0] > start/prop/fs) & (ripples[:,0] < (start + numSamples)/prop/fs)]
-            return in_chunk
-        else: 
-            return None
+
+        in_chunk = ripples[(ripples[:,0] > start/prop/fs) & (ripples[:,0] < (start + numSamples)/prop/fs)]
+
+        return in_chunk
 
 
     def load_dat(self, path, channels, numSamples = False, verbose=False):
@@ -197,7 +196,7 @@ class read_data():
 
 
 
-    def load(self, data_path, shank, downsample, normalize,invert):
+    def load(self, data_path, shank, downsample, normalize,invert, channels=None):
         """
         Load all, optionally downsample and normalize it.
 
@@ -226,7 +225,9 @@ class read_data():
         #     print(f'No data available for shank {shank}\n\n{err}')
         #     return 
         # channels=[24,20,23,27,25,21,22,26,28,16,19,31,29,17,18,30,15,3,0,12,14,2,1,13,11,7,4,8,10,6,5,9]
-        channels=range(self.channel_num)
+        if channels is None:
+            channels=range(self.channel_num)
+            self.channels=channels
         # channels=channels[shank*8-8:shank*8]
       
         raw_data = self.load_dat(data_path, channels, numSamples=self.numSamples)
@@ -321,8 +322,8 @@ class read_data():
             self.timestamps -= self.timestamps[0]
         self.duration=self.timestamps[-1]
 
-        if self.channel_num == 40:
-            ttl_channel = 32
+        if self.channel_num == 40 and 32 in self.channels:
+            ttl_channel = np.where(np.array(self.channels) == 32)[0][0]
             if hasattr(self, 'data'):
                 ttl_signal = self.data[:, ttl_channel]
             else:
@@ -940,10 +941,10 @@ def plot_difference(liset):
 
 
 
-data_path=r"D:\Madrid_tests"
-name="2025-09-24_14-37-17"
+# data_path=r"D:\Madrid_tests"
+# name="2025-09-24_14-37-17"
 
-invert=True
+# invert=True
 
 # liset=read_data(data_path, name, downsample=1000, normalize=True, invert=invert,offset=0)
 # # print(liset.offline_detections[:10]/liset.fs)

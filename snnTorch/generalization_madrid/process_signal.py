@@ -17,17 +17,18 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
     except Exception as e:
         print(f"⚠️ Skipping {name} - invalid format: {e}")
         return None
-
+    
+    
     # determine invert rule
     invert = session_date >= 24
 
     liset=read_data(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
                            start = start, verbose=verbose, original_fs=original_fs,channel_num=None,
-                           invert=invert,offset=offset,load_data=load_data)
+                           invert=invert,offset=offset,load_data=load_data,channels=[channel-1])
     
     filtered_signal = None
     if load_data:
-        channel_data=liset.data[:,channel-1]
+        channel_data= liset.data[:].reshape(-1)
         filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
     ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
 
