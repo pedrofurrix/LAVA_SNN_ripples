@@ -17,6 +17,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import sys
 
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat
@@ -42,11 +43,13 @@ class read_data():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
 
-    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channel_num=None,invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None):
+    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channel_num=None,invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False):
         
         self.oe_path=os.path.join(data_path,"Open Ephys",name)
         self.annotation_path=os.path.join(data_path,"annotations")
         self.offline_path=os.path.join(data_path,"offline",f"{buffer_size}")
+        
+        self.scale_data=scale_data
         # Set the verbose
         self.verbose = verbose
         if self.verbose:
@@ -188,6 +191,11 @@ class read_data():
                         data = json.load(f)
                         num_channels = data["continuous"][0]["num_channels"]
                         self.channel_num=num_channels
+                        self.bit_uvolts=data["continuous"][0]["channels"][0]["bit_volts"] # conversion to microvolts...
+                        for channel in data["continuous"][0]["channels"]:
+                            if "ADC" in channel["channel_name"]:
+                                self.ttl_bit_volts=channel["bit_volts"]
+                                break
 
                 except Exception as e:
                     print(f"Error reading structure.oebin: {e}")
@@ -276,7 +284,11 @@ class read_data():
             if self.verbose:
                 print("Done!")
                 print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
-     
+
+        if self.scale_data:
+            data = data[:,:32] * self.bit_uvolts # Convert to microvolts
+            if self.channel_num==40 and 32 in self.channels:
+                data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to microvolts
         return data
 
     def load_ripple_times(self,path,invert=False):
