@@ -14,6 +14,11 @@ import numpy as np
 from scipy import signal
 import os
 import pickle as pkl
+
+import sys
+curr_dir=os.path.dirname(os.path.abspath(__file__))
+par_dir=os.path.dirname(curr_dir)
+sys.path.insert(0, par_dir)
 import liset_tk.read_data as read_data
 import liset_tk.lists_sessions as lists_sessions
 import dutta_test.ripple_filtering as ripple_filtering
@@ -47,6 +52,8 @@ def process_and_detect(
     Returns dict with: envelope, smoothed_envelope, mu, sigma, threshold,
     detections (list of dicts with `sample` and `time_s`), and `fs_down`.
     """
+
+    print("Processing signal for ripple detection...")
     if raw.ndim != 1:
         raise ValueError("raw must be a 1-D array for a single channel")
 
@@ -131,7 +138,7 @@ def save_detections_dict(detections_dict: Dict,alpha: float) -> str:
 
     with open(pkl_path, "wb") as f:
         pkl.dump(detections_dict, f, protocol=pkl.HIGHEST_PROTOCOL)
-
+    print(f"Saved detections to {pkl_path}")
     return pkl_path
 
 
@@ -170,7 +177,7 @@ def detect_and_save_sessions(
             "detections": out["detections"],
         }
 
-    pkl_path = save_detections_dict(results)
+    pkl_path = save_detections_dict(results,alpha)
     return pkl_path
 
 
@@ -188,7 +195,7 @@ if __name__ == "__main__":
     #             "2025-09-24_17-38-17",} #R 
     session_set.update({ 
         "2025-09-24_16-29-07", #R   
-        "2025-09-24_17-38-17" #R 
+        "2025-09-24_17-38-17", #R 
         "2025-09-22_17-42-27", 
         "2025-09-23_16-17-52", 
         "2025-09-24_11-34-51",
@@ -199,5 +206,5 @@ if __name__ == "__main__":
         path,
         session_set,
         fs=30000,
-        alpha=3.0,
+        alpha=8.0,
     )

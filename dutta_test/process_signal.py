@@ -30,6 +30,8 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
     if load_data:
         channel_data= liset.data[:].reshape(-1)
         # filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
+    else:
+        channel_data=None
     ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
 
     return channel_data, ripples

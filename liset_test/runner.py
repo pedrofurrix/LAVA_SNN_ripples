@@ -1,3 +1,9 @@
+import sys
+import os
+curr_dir=os.path.dirname(os.path.abspath(__file__))
+par_dir=os.path.dirname(curr_dir)
+sys.path.insert(0, par_dir)
+
 from liset_tk.load_data import *
 from liset_tk.read_data import *
 import liset_tk.lists_sessions as lists_sessions
@@ -7,14 +13,14 @@ from liset_tk.format_predictions import *
 import tensorflow.keras.backend as K
 import tensorflow.keras as kr
 
-def run_detection_cnn(threshold,path,sessions,channels):
+def run_detection_cnn(threshold,path,sessions,channels_sessions):
     curr_dir=os.path.dirname(os.path.abspath(__file__))
     overlapping = True
     window_size = 0.0128
     downsample=1250
     all_predictions = {}
     for session in sessions:
-        channel=channels.get(session,None)-1
+        channel=channels_sessions.get(session,None)-1
         shank=channel//8
         channels=np.arange(shank*8,shank*8+8)
         data,_=load_experimental_data(path,session,downsample=downsample,normalize=True,channel=channels)
@@ -31,7 +37,7 @@ def run_detection_cnn(threshold,path,sessions,channels):
 
         print("Loading CNN model...", end=" ")
         optimizer = kr.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-07, amsgrad=False)
-        model = kr.models.load_model(os.path.join(curr_dir, "saved_model.pb"), compile=False)
+        model = kr.models.load_model(os.path.join(curr_dir, "model"), compile=False)
         model.compile(loss="binary_crossentropy", optimizer=optimizer)
 
         print("Done!")
@@ -72,11 +78,11 @@ if __name__ == "__main__":
     #             "2025-09-24_17-38-17",} #R 
     session_set.update({ 
         "2025-09-24_16-29-07", #R   
-        "2025-09-24_17-38-17" #R 
+        "2025-09-24_17-38-17", #R 
         "2025-09-22_17-42-27", 
-        "2025-09-23_16-17-52", 
         "2025-09-24_11-34-51",
         "2025-09-25_11-21-53",
         "2025-09-25_12-52-22",})
     channel_sessions=lists_sessions.channel_sessions
-    run_detection_cnn(0.7,path,session_set,channel_sessions)
+    for threshold in [0.3,0.4,]:
+        run_detection_cnn(threshold,path,session_set,channel_sessions)

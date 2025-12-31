@@ -27,7 +27,7 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
                            invert=invert,offset=offset,load_data=load_data,channels=channel)
     
     filtered_signal = None
-    channel_data=liset.data
+    channel_data=liset.data if load_data else None
     ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
 
     return channel_data, ripples
