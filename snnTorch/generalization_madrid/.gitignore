@@ -1,2 +1,5 @@
 # Ignore npy
 spikes/*
+!spikes/all_networks_metrics.csv
+spikes_og/*
+!spikes_og/all_networks_metrics.csv
