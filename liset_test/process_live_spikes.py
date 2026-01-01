@@ -227,7 +227,7 @@ if __name__ == "__main__":
     # Path to the directory containing spike pickle files (searches recursively)
     SPIKES_ROOT = os.path.join(curr_dir, "cnn_detections")
     DATA_PATH = r"C:\Madrid_tests" # Update this if different
-    OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics.csv")
+    OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics_liset.csv")
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
     

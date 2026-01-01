@@ -1,5 +1,6 @@
 import sys
 import os
+import pickle as pkl
 curr_dir=os.path.dirname(os.path.abspath(__file__))
 par_dir=os.path.dirname(curr_dir)
 sys.path.insert(0, par_dir)
@@ -18,8 +19,22 @@ def run_detection_cnn(threshold,path,sessions,channels_sessions):
     overlapping = True
     window_size = 0.0128
     downsample=1250
-    all_predictions = {}
+    
+    save_path=os.path.dirname(os.path.abspath(__file__))
+    out_dir = os.path.join(save_path, "cnn_detections",)
+    pkl_path = os.path.join(out_dir, f"detections_thr_{threshold}.pkl")
+
+    if os.path.exists(pkl_path):
+        print(f"Loading existing predictions from {pkl_path}")
+        with open(pkl_path, "rb") as f:
+            all_predictions = pkl.load(f)
+    else:
+        all_predictions = {}
+
     for session in sessions:
+        if session in all_predictions:
+            print(f"Session {session} already processed. Skipping.")
+            continue
         channel=channels_sessions.get(session,None)-1
         shank=channel//8
         channels=np.arange(shank*8,shank*8+8)
@@ -79,10 +94,13 @@ if __name__ == "__main__":
     session_set.update({ 
         "2025-09-24_16-29-07", #R   
         "2025-09-24_17-38-17", #R 
-        "2025-09-22_17-42-27", 
+        "2025-09-22_17-42-27",
         "2025-09-24_11-34-51",
         "2025-09-25_11-21-53",
         "2025-09-25_12-52-22",})
+    
+
+    sessions=["2025-09-23_16-17-52"]
     channel_sessions=lists_sessions.channel_sessions
-    for threshold in [0.3,0.4,]:
-        run_detection_cnn(threshold,path,session_set,channel_sessions)
+    for threshold in [0.3,0.4,0.5,0.6,0.7]:
+        run_detection_cnn(threshold,path,sessions,channel_sessions)
