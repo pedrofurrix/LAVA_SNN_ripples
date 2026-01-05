@@ -174,8 +174,10 @@ def run_power_analysis():
     WINDOW_MS = 100 # +/- 100ms
     FS = 30000
     WINDOW_SAMP = int(WINDOW_MS * FS / 1000)
-    SESSIONS_TO_EXCLUDE={"2025-09-24_16-29-07", #R   
-        "2025-09-24_17-38-17",} #R 
+    SESSIONS_TO_EXCLUDE={        
+        "2025-09-24_17-38-17", # Barely any ripples (14 in total...)
+        "2025-09-25_12-52-22", # Not a good session to detect ripples
+        }
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
     
