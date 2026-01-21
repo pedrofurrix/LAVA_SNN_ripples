@@ -43,7 +43,7 @@ class read_data():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
 
-    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channel_num=None,invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False):
+    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False):
         
         self.oe_path=os.path.join(data_path,"Open Ephys",name)
         self.annotation_path=os.path.join(data_path,"annotations")
@@ -56,12 +56,16 @@ class read_data():
             print(f"Loading data from session: {name}")
         self.numSamples = numSamples
         self.start = start
-        self.original_fs = original_fs
+        
         self.annotated=RippleEvents(offset=offset)
         self.from_data=RippleEvents(offset=offset)
         self.normalize=normalize
         self.name=name
         self.channels=channels
+
+        self.get_channel_num(self.oe_path)
+
+
         if downsample:
             self.downsampled_fs = downsample
             self.fs_conv_fact = self.original_fs/self.downsampled_fs
@@ -69,10 +73,7 @@ class read_data():
             self.fs_conv_fact = 1
             self.downsampled_fs = self.original_fs
 
-        if channel_num is None:
-            self.get_channel_num(self.oe_path)
-        else:
-            self.channel_num=channel_num
+ 
 
         # Load the data.
         if load_data:
@@ -129,13 +130,13 @@ class read_data():
         """
         try:
             list_dir=os.listdir(path)
-            file=list_dir[1]
+            file=list_dir[0]
             record_file=os.path.join(path,file,"experiment1","recording1","continuous")
             list_2=os.listdir(record_file)
             folder=os.path.join(record_file,list_2[0])
             filename=os.path.join(folder,"continuous.dat")
             self.file_len = os.path.getsize(filename=filename)
-            self.file_samples = self.file_len / self.channel_num / 2
+            self.file_samples = self.file_len // (self.channel_num * 2)
             timestamps_file= os.path.join(folder,"timestamps.npy")
             self.timestamps = np.load(timestamps_file)
             if self.timestamps[0]>0:
@@ -190,6 +191,7 @@ class read_data():
                     with open(record_file, "r") as f:
                         data = json.load(f)
                         num_channels = data["continuous"][0]["num_channels"]
+                        self.original_fs=data["continuous"][0]["sample_rate"]
                         self.channel_num=num_channels
                         self.bit_uvolts=data["continuous"][0]["channels"][0]["bit_volts"] # conversion to microvolts...
                         for channel in data["continuous"][0]["channels"]:
@@ -285,10 +287,10 @@ class read_data():
                 print("Done!")
                 print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
 
-        if self.scale_data:
-            data = data[:,:32] * self.bit_uvolts # Convert to microvolts
+        if self.scale_data and not normalize:
+            data = data[:,:32] * self.bit_uvolts *1e-6 # Convert to volts
             if self.channel_num==40 and 32 in self.channels:
-                data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to microvolts
+                data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to volts
         return data
 
     def load_ripple_times(self,path,invert=False):
@@ -334,9 +336,12 @@ class read_data():
             self.timestamps -= self.timestamps[0]
         self.duration=self.timestamps[-1]
 
-        if self.channel_num == 40 and 32 in self.channels:
-            ttl_channel = np.where(np.array(self.channels) == 32)[0][0]
+        if self.channel_num == 40:
             if hasattr(self, 'data'):
+                if 32 not in self.channels:
+                    print("⚠️ TTL channel (32) not loaded, cannot extract TTL signal.")
+                    return
+                ttl_channel = np.where(np.array(self.channels) == 32)[0][0]
                 ttl_signal = self.data[:, ttl_channel]
             else:
                 print("⚠️ Data not loaded, cannot extract TTL signal.")
@@ -441,279 +446,6 @@ class read_data():
         except Exception as e:
             print(f"Error loading offline data: {e}")
             self.offline_detections = np.array([])
-
-
-
-    @plain_plot
-    @hide_y_ticks_on_offset
-    def plot_event(self, 
-                   event, 
-                   offset=0, 
-                   extend=0, 
-                   delimiter=False, 
-                   show=True, 
-                   filtered=[], 
-                   title='', 
-                   label='', 
-                   ch=False,
-                   ylim=False,
-                   line_color=False,
-                   show_ground_truth=False, 
-                   show_predictions=False, 
-                   plain=False):
-        """
-        Plot the ripple signal number idx.
-
-        Parameters:
-        - idx (int): Index of the ripple to plot.
-        - offset (float): Offset between channels for visualization.
-        - extend (float): Extend the plotted time range before and after the ripple.
-        - delimiter (bool): Whether to highlight the ripple area.
-
-        Returns:
-        - fig (matplotlib.figure.Figure): The generated figure.
-        - ax (matplotlib.axes.Axes): The axes object containing the plot.
-        """
-            
-        prop = self.fs_conv_fact
-        interval = deepcopy(event)
-        handles = []
-        labels = []
-
-        try:
-            if extend != 0:
-                if (interval[0] - extend) < 0:
-                    interval[0] = int(self.start / prop)
-                else:
-                    interval[0] = interval[0] - extend
-
-                if (interval[1] + extend) > self.numSamples/prop:
-                    interval[1] = int((self.start + self.numSamples)/prop)
-                else:
-                    interval[1] = interval[1] + extend
-
-        except IndexError:
-            print('IndexError')
-            print(f'There no data available for the selected samples.\nLength of loaded data: {int(self.numSamples/self.fs_conv_fact)}')
-            return None, None
-
-        # Define window data
-        self.window_interval = interval
-        mask = (self.ripples_GT[:, 1] >= interval[0]) & (self.ripples_GT[:, 0] <= interval[1])
-        self.window_ripples = self.ripples_GT[mask]
-
-        interval_data = self.data[interval[0]: interval[1]][:]
-        self.window = deepcopy(interval_data)
-        
-        time_vector = np.linspace(interval[0] / self.fs, interval[1] / self.fs, interval_data.shape[0])
-        if show:
-            fig, ax = plt.subplots(figsize=(10, 6))
-        for i, chann in enumerate(interval_data.transpose()):
-            if filtered:
-                bandpass = filtered
-                chann = bandpass_filter(chann, bandpass, self.fs)
-                self.window[:, i] = chann
-            if show:
-                if ch:
-                    if i in ch:
-                        if line_color:
-                            ax.plot(time_vector, chann + i * offset, line_color)
-                        else:
-                            ax.plot(time_vector, chann + i * offset)
-                else:
-                    if line_color:
-                        ax.plot(time_vector, chann + i * offset, line_color)
-                    else:
-                        ax.plot(time_vector, chann + i * offset)
-            
-            if ylim:
-                ax.set_ylim(ylim)
-                
-
-        max_val = np.max(self.window.reshape((self.window.shape[0]*self.window.shape[1]))) + offset*8
-        min_val = np.min(self.window.reshape((self.window.shape[0]*self.window.shape[1])))
-
-        if delimiter and show:
-            if extend > 0:
-                ripple_area = [time_vector[round(extend)], time_vector[-round(extend)]]
-                if not label:
-                    label='Event area'
-                fill_DEL = ax.fill_between(ripple_area, min_val, max_val, color="tab:blue", alpha=0.2)
-                handles.append(fill_DEL)
-                labels.append(label)
-            else:
-                if self.verbose:
-                    print('Delimiter not applied because there is no extend.')
-
-        if show_ground_truth:
-            if hasattr(self.ripples_GT, 'dtype'):
-                for ripple in self.window_ripples:
-                    fill_GT = ax.fill_between([ripple[0] / self.fs, ripple[1] / self.fs],  min_val, max_val, color="tab:red", alpha=0.3)
-
-            if 'fill_GT' in locals():
-                handles.append(fill_GT)
-                labels.append('Ground truth' if not label else label)
-
-        if show_predictions:
-            if hasattr(self, 'prediction_idxs'):
-                mask = (self.prediction_idxs[:, 1] >= interval[0]) & (self.prediction_idxs[:, 0] <= interval[1])
-                self.prediction_times_from_window = self.prediction_times[mask]
-                for times in self.prediction_times_from_window:
-                    fill_PRED = ax.fill_between([times[0], times[1]], min_val, max_val, color="tab:blue", alpha=0.3)
-
-            if 'fill_PRED' in locals():
-                handles.append(fill_PRED)
-                labels.append(f'{self.model_type} predict')
-
-        # Figure styles
-        if filtered and not title:
-            title = f'Filtered channels\nEvent {interval}\nBandpass: {bandpass[0]}-{bandpass[1]}'
-        if not title:
-            title = f'Channels for samples {interval}'
-
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Amplitude (mV)')
-        if not len(handles) == 0:        
-            ax.legend(handles, labels)
-
-        text = ax.set_title(title, loc='center', fontfamily='serif', fontsize=12, fontweight='bold')
-        ax.grid(True)
-        self.fig = fig
-        self.ax = ax
-
-        if show:
-            return fig, ax
-
-    def plot_all(self, ch=None, offset=0, filtered=None, extend=0.5, title='Overview', window=None):
-        """
-        Plot data with overlays for:
-        - Ground truth ripples (yellow)
-        - Model predicted ripples (blue)
-        - Light stimulation TTLs (red)
-
-        Parameters
-        ----------
-        ch : int or list of ints, optional
-            Channel(s) to plot. If None, plots the first channel.
-        offset : float, optional
-            Vertical offset between channels.
-        filtered : tuple (low, high), optional
-            Bandpass filter range (Hz).
-        extend : float, optional
-            Extra context (in seconds) around each event.
-        title : str, optional
-            Title for the plot.
-        window : tuple (start, end), optional
-            Time window in seconds to plot (e.g., (10, 20)).
-        """
-
-        # ---------------------
-        # Select channels
-        # ---------------------
-        if ch is None:
-            ch = [0]
-        elif isinstance(ch, int):
-            ch = [ch]
-
-        n_samples = self.data.shape[0]
-        time = np.arange(n_samples) / self.fs
-
-        # ---------------------
-        # Apply time window
-        # ---------------------
-        if window is not None:
-            start_s, end_s = window
-            start_idx = int(start_s * self.fs)
-            end_idx = int(end_s * self.fs)
-            time = time[start_idx:end_idx]
-            data_slice = self.data[start_idx:end_idx, :]
-        else:
-            data_slice = self.data
-
-        fig, ax = plt.subplots(figsize=(15, 6))
-        plt.title(title)
-        plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude (normalized units)")
-
-        # ---------------------
-        # Plot data (optionally filtered)
-        # ---------------------
-        for i, ch_idx in enumerate(ch):
-            sig = deepcopy(data_slice[:, ch_idx])
-            if filtered:
-                from signal_aid import bandpass_filter
-                sig = bandpass_filter(sig, filtered, self.fs)
-
-            ax.plot(time, sig + i * offset, color="black", lw=0.8, label=f"Ch {ch_idx}" if i == 0 else "")
-
-        min_y, max_y = ax.get_ylim()
-
-        # ---------------------
-        # Helper function to plot intervals safely within window
-        # ---------------------
-        def plot_intervals(intervals, color, label):
-            if window is not None:
-                mask = (intervals[:, 1] / self.fs > start_s) & (intervals[:, 0] / self.fs < end_s)
-                intervals = intervals[mask]
-            for i, r in enumerate(intervals):
-                ax.fill_between(r / self.fs, min_y, max_y, color=color, alpha=0.3, label=label if i == 0 else "")
-
-        # ---------------------
-        # Ground truth ripples (yellow)
-        # ---------------------
-        if hasattr(self.annotated, "ripples_GT") and self.annotated.ripples_GT is not None:
-            plot_intervals(self.annotated.ripples_GT, "yellow", "Ground truth")
-
-        # ---------------------
-        # Predicted ripples (blue)
-        # ---------------------
-        if hasattr(self.from_data, "snn_predicts") and self.from_data.snn_predicts is not None:
-            # plot_intervals(self.from_data.snn_predicts, "tab:blue", "Predicted")
-            starts = self.from_data.snn_predicts[:, 0] / self.fs
-            if window is not None:
-                starts = starts[(starts >= start_s) & (starts <= end_s)]
-            ax.vlines(starts, min_y, max_y, color="tab:blue", alpha=0.5, lw=0.5,label="Predicted")
-
-        if hasattr(self.annotated, "snn_predicts") and self.annotated.snn_predicts is not None:
-            starts = self.annotated.snn_predicts[:, 0] / self.fs
-            if window is not None:
-                starts = starts[(starts >= start_s) & (starts <= end_s)]
-            ax.vlines(starts, min_y, max_y, color="green", alpha=0.5, lw=0.5,label="Annotated Predicted")
-
-        # ---------------------
-        # Light stimulation (red)
-        # ---------------------
-        if hasattr(self.from_data, "light_stim") and self.from_data.light_stim is not None:
-            plot_intervals(self.from_data.light_stim, "red", "Light stim")
-            starts = self.from_data.light_stim[:, 0] / self.fs
-            if window is not None:
-                starts = starts[(starts >= start_s) & (starts <= end_s)]
-            ax.vlines(starts, min_y, max_y, color="red", alpha=0.5, lw=0.5)
-
-        if hasattr(self.annotated, "light_stim") and self.annotated.light_stim is not None:
-            plot_intervals(self.annotated.light_stim, "orange", "Annotated light stim")
-            starts = self.annotated.light_stim[:, 0] / self.fs
-            if window is not None:
-                starts = starts[(starts >= start_s) & (starts <= end_s)]
-            ax.vlines(starts, min_y, max_y, color="orange", alpha=0.5, lw=0.5)
-
-        # ---------------------
-        # Offline detections (purple dashed)
-        # ---------------------
-        if hasattr(self, "offline_detections") and self.offline_detections.size > 0:
-            offline_starts = self.offline_detections / self.fs
-            if window is not None:
-                offline_starts = offline_starts[(offline_starts >= start_s) & (offline_starts <= end_s)]
-            ax.vlines(offline_starts, min_y, max_y, color="purple", alpha=0.5, lw=0.5, ls='--', label="Offline detections")
-        # ---------------------
-        # Beautify
-        # ---------------------
-        handles, labels = ax.get_legend_handles_labels()
-        unique = dict(zip(labels, handles))
-        ax.legend(unique.values(), unique.keys())
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
 
     def plot_offline(self, ch=None, offset=0, filtered=None, extend=0.5, title='Overview', window=None):
         """
@@ -875,6 +607,7 @@ class RippleEvents():
             self.snn_predicts = convert(self.snn_predicts-self.offset)
         if isinstance(self.light_stim, np.ndarray) and self.light_stim.size > 0:
             self.light_stim = convert(self.light_stim)
+
 
 
 def plot_difference(liset):
