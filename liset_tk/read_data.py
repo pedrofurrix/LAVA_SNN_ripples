@@ -30,6 +30,9 @@ import pickle as pkl
 
 
 
+from liset_tk.gt_annotations import *
+import liset_tk.lists_sessions as lists_sessions
+
 class read_data():
     """
     Class for handling data processing and visualization related to ripple events.
@@ -42,8 +45,8 @@ class read_data():
     - numSamples (int, optional): Number of samples. Default is False.
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
-
-    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False):
+    # TODO: There are still some problems - namely the annotation does not obey to 
+    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False,recording_node=1,annotation_type=None):
         
         self.oe_path=os.path.join(data_path,"Open Ephys",name)
         self.annotation_path=os.path.join(data_path,"annotations")
@@ -62,7 +65,8 @@ class read_data():
         self.normalize=normalize
         self.name=name
         self.channels=channels
-
+        self.recording_node=recording_node
+        self.annotation_type=annotation_type
         self.get_channel_num(self.oe_path)
 
 
@@ -104,7 +108,7 @@ class read_data():
         self.load_annotations(self.annotation_path,self.name)
         self.load_ripple_times(self.oe_path,invert)
         self.load_offline()
-
+        self.get_gt_annotations()
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
             numSamples = self.file_samples - self.start
@@ -113,6 +117,23 @@ class read_data():
 
         return in_chunk
 
+    def get_gt_annotations(self,):
+        self.manual_GT=self.annotated.ripples_GT
+        if self.annotation_type is not None:
+            if self.annotation_type=="manual_GT":
+                return self.annotated.ripples_GT # Samples
+            else:
+                if hasattr(self, 'data'):
+                    if self.data.shape[1]>1:
+                        channel=lists_sessions.channel_sessions[self.name]-1
+                    else:
+                        channel=0
+                else:
+                    self.load(self.oe_path, shank=0, downsample = False, normalize=self.normalize,invert=False, channels=lists_sessions.channel_sessions[self.name]-1)
+                info=get_ripple_events(self.data[channel],self.fs,config=self.annotation_type)
+                #get start and end times from annnotations...
+                ripple_idx = info[["start_idx","end_idx"]].to_numpy()
+                self.annotated.ripples_GT=ripple_idx    
 
     def load_dat(self, path, channels, numSamples = False, verbose=False):
         """
@@ -130,7 +151,7 @@ class read_data():
         """
         try:
             list_dir=os.listdir(path)
-            file=list_dir[0]
+            file=list_dir[self.recording_node] # Record Node 0 or 1 - #TODO: make it more robust and see if it isn't better to have 0...
             record_file=os.path.join(path,file,"experiment1","recording1","continuous")
             list_2=os.listdir(record_file)
             folder=os.path.join(record_file,list_2[0])
@@ -249,6 +270,7 @@ class read_data():
         self.load_annotations(self.annotation_path,self.name)
         self.load_ripple_times(data_path,invert)
         self.load_offline()
+        self.get_gt_annotations()
 
     
 
@@ -362,15 +384,11 @@ class read_data():
 
                 # Rising edges (0 -> 1)
                 rising_edges = np.where(edges == 1)[0]
-                # print(len(rising_edges))
 
                 # Falling edges (1 -> 0)
                 falling_edges = np.where(edges == -1)[0]
-                # print(len(falling_edges))
 
-                # Optionally invert TTL logic # when the other is not inverted
-                # if not invert:
-                #     rising_edges, falling_edges = falling_edges, rising_edges
+
                 if len(falling_edges)!=len(rising_edges):
                     if len(rising_edges)>len(falling_edges):
                         print(" ⚠️ More falling edges than rising edges, adjusting...")
@@ -423,7 +441,7 @@ class read_data():
                 folder_path=os.path.join(path,file,f"events_{name}","events")
                 print(folder_path)
                 self.annotated.ripples_GT=self.ripples_in_chunk(np.loadtxt(os.path.join(folder_path,"events_selected_manually.txt")),self.start,self.numSamples,self.fs,self.fs_conv_fact)
-                # print(self.annotated.ripples_GT)
+
                 self.annotated.snn_predicts=self.ripples_in_chunk(np.loadtxt(os.path.join(folder_path,"events_SNN.txt")),self.start,self.numSamples,self.fs,self.fs_conv_fact)
                 # print(self.annotated.snn_predicts)
                 try:
@@ -607,82 +625,6 @@ class RippleEvents():
             self.snn_predicts = convert(self.snn_predicts-self.offset)
         if isinstance(self.light_stim, np.ndarray) and self.light_stim.size > 0:
             self.light_stim = convert(self.light_stim)
-
-
-
-def plot_difference(liset):
-    """
-    Compare timing differences between light stim starts and SNN predicted starts
-    for both 'from_data' and 'annotated' sources.
-    """
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    def compute_and_plot_diff(source, label, color,expected_offset=0.2, max_delay=0.5):
-        snn_predicts = getattr(source, "snn_predicts", None)
-        light_stim = getattr(source, "light_stim", None)
-
-        if snn_predicts is None or light_stim is None:
-            print(f"⚠️ Missing data in {label}: ensure both 'snn_predicts' and 'light_stim' exist.")
-            return None
-
-        snn_starts = snn_predicts[:, 0] / liset.fs
-        light_starts = light_stim[:, 0] / liset.fs
-
-        matched_diffs = []
-        used_snn_idx = set()
-
-        for t_light in light_starts:
-            # expected snn time (light + expected_offset)
-            expected_time = t_light + expected_offset
-            
-            # find nearest snn time to that expected value
-            idx = np.argmin(np.abs(snn_starts - expected_time))
-            nearest_snn = snn_starts[idx]
-            diff = nearest_snn - t_light
-
-            # only accept if within window and not already used
-            if abs(diff - expected_offset) < max_delay and idx not in used_snn_idx:
-                matched_diffs.append(diff)
-                used_snn_idx.add(idx)
-            else:
-                # skip if no reasonable match found
-                continue
-
-        if len(matched_diffs) == 0:
-            print(f"⚠️ {label}: No valid matches found within {max_delay}s window.")
-            return None
-
-        diffs = np.array(matched_diffs)
-        print(f"✅ {label}: matched {len(diffs)} events "
-            f"(light={len(light_starts)}, snn={len(snn_starts)})")
-
-        # Plot histogram of timing differences
-        ax.hist(diffs, bins=20, alpha=0.6, label=f"{label} (n={len(diffs)})", color=color, edgecolor="black")
-
-        # Print summary stats
-        print(f"📊 {label} timing differences:")
-        print(f"  Mean Δt = {np.mean(diffs):.4f} s")
-        print(f"  Std Δt  = {np.std(diffs):.4f} s")
-        print(f"  Median  = {np.median(diffs):.4f} s\n")
-
-        return diffs
-
-    # Compute and plot both sets
-    diffs_data = compute_and_plot_diff(liset.from_data, "From data", "tab:blue")
-    diffs_annot = compute_and_plot_diff(liset.annotated, "Annotated", "tab:orange")
-
-    # Format figure
-    ax.axvline(np.mean(diffs_data), color='gray', lw=1, ls='--',label='Mean From Data') if diffs_data is not None else None
-    ax.axvline(np.mean(diffs_annot), color='black', lw=1, ls='--',label='Mean Annotated') if diffs_annot is not None else None
-    ax.set_xlabel("Δt = Predicted start − Light start [s]")
-    ax.set_ylabel("Count")
-    ax.set_title("Timing Differences: SNN Prediction vs Light Stimulation")
-    ax.legend()
-    plt.tight_layout()
-    plt.show()
-
-    return {"from_data": diffs_data, "annotated": diffs_annot}
 
 
 
