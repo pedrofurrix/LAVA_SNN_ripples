@@ -6,7 +6,7 @@ sys.path.insert(0, liset_path)
 
 from liset_aux import ripples_std, middle
 from signal_aid import most_active_channel, bandpass_filter
-from liset_tk import liset_tk
+from liset_tk import original_data_reader
 import os
 import numpy as np
 from copy import deepcopy
@@ -49,7 +49,7 @@ for bandpass in bp_filters:
         # Loop until all ripples are saved in the list
         while keep_looping:
             print(f'Start: {start}', end='\r', flush=True)
-            liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=start, numSamples=chunk_size, verbose=False)
+            liset = original_data_reader(dataset_path, shank=3, downsample=downsampled_fs, start=start, numSamples=chunk_size, verbose=False)
             if hasattr(liset, 'data'):
                 # Update the reading start for the next loop
                 start += chunk_size
@@ -88,7 +88,7 @@ for bandpass in bp_filters:
         while keep_looping:
             true_positives = []
             print(f'Start: {start}', end='\r', flush=True)
-            liset = liset_tk(dataset_path, shank=3, downsample=downsampled_fs, start=start, numSamples=chunk_size, verbose=False)
+            liset = original_data_reader(dataset_path, shank=3, downsample=downsampled_fs, start=start, numSamples=chunk_size, verbose=False)
             if hasattr(liset, 'data'):
                 # Update the reading start for the next loop
                 start += chunk_size

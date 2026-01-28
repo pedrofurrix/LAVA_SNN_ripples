@@ -12,7 +12,7 @@ liset_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../liset_t
 sys.path.insert(0, liset_path)
 from signal_aid import y_discretize_1Dsignal, cutoff_amplitude
 import os
-from liset_tk import liset_tk
+from liset_tk import original_data_reader
 
 # bandpass=[100,250]
 # Load the saved dataset

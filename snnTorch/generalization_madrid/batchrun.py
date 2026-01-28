@@ -1,7 +1,12 @@
-from live_validation_batcher import run_inference
 import argparse
 import gc
-import lists_sessions
+import os
+from live_validation_batcher import run_inference
+import sys
+ROOT_DIR=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if ROOT_DIR not in os.sys.path:
+    sys.path.append(ROOT_DIR)
+import liset_tk.lists_sessions as lists_sessions
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate trained SNN model for ripple detection.")
@@ -16,28 +21,29 @@ if __name__ == "__main__":
     prefix = args.prefix
     adapt = args.adapt
 
-    data_path=r"C:\Madrid_tests"
+    data_path=r"C:\PedroFelix\extra_data\original_data"
+    
     # sessions=lists_sessions.annotated_sessions
 
-    # Original Sessions 
-    session_set={"2025-09-22_17-55-26", #R
-                 "2025-09-23_15-50-26", #R
-                 "2025-09-24_10-24-40", #R
-                 "2025-09-24_14-22-55", #H
-                 "2025-09-24_15-13-10", #H
-                 "2025-09-25_16-41-14"} #R
+#     # Original Sessions 
+#     session_set={"2025-09-22_17-55-26", #R
+#                  "2025-09-23_15-50-26", #R
+#                  "2025-09-24_10-24-40", #R
+#                  "2025-09-24_14-22-55", #H
+#                  "2025-09-24_15-13-10", #H
+#                  "2025-09-25_16-41-14"} #R
 
-    # Extra
-#     session_set={"2025-09-24_16-29-07", #R   
-#             "2025-09-24_17-38-17",} #R 
-    session_set.update({ "2025-09-24_16-29-07", #R   
-            "2025-09-24_17-38-17",
-                "2025-09-22_17-42-27", 
-                 "2025-09-23_16-17-52", 
-                 "2025-09-24_11-34-51",
-                 "2025-09-25_11-21-53",
-                 "2025-09-25_12-52-22",})
-
+#     # Extra
+# #     session_set={"2025-09-24_16-29-07", #R   
+# #             "2025-09-24_17-38-17",} #R 
+#     session_set.update({ "2025-09-24_16-29-07", #R   
+#             "2025-09-24_17-38-17",
+#                 "2025-09-22_17-42-27", 
+#                  "2025-09-23_16-17-52", 
+#                  "2025-09-24_11-34-51",
+#                  "2025-09-25_11-21-53",
+#                  "2025-09-25_12-52-22",})
+    session_set=lists_sessions.extra_sessions
     channel_sessions=lists_sessions.channel_sessions
     run_inference(
             prefix,

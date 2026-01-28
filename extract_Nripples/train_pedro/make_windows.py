@@ -1,4 +1,4 @@
-from liset_tk import liset_tk
+from liset_tk import liset_paper as liset_tk
 import os
 import numpy as np
 from signal_aid import most_active_channel, bandpass_filter
@@ -173,7 +173,7 @@ def make_windows_mesquita(parent,config,time_max,downsampled_fs,bandpass,window_
     for dataset in os.listdir(parent):
         config[str(dataset)]={}
         dataset_path = os.path.join(parent, dataset)
-        liset= liset_tk(dataset_path, shank=3, downsample=downsampled_fs, verbose=False)
+        liset= original_data_reader(dataset_path, shank=3, downsample=downsampled_fs, verbose=False)
 
         ripples=np.array(liset.ripples_GT)
         spikified=np.zeros((liset.data.shape[0], liset.data.shape[1], 2))

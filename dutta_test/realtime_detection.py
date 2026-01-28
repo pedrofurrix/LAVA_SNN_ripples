@@ -19,7 +19,8 @@ import sys
 curr_dir=os.path.dirname(os.path.abspath(__file__))
 par_dir=os.path.dirname(curr_dir)
 sys.path.insert(0, par_dir)
-import liset_tk.read_data as read_data
+from liset_tk.read_data import read_data
+from liset_tk.liset_tk_extra import liset_tk_extra
 import liset_tk.lists_sessions as lists_sessions
 import dutta_test.ripple_filtering as ripple_filtering
 from  dutta_test.process_signal import *
@@ -160,13 +161,17 @@ def detect_and_save_sessions(
     results = {}
     for session in sessions:
         channel_sessions=lists_sessions.channel_sessions
+        extra_sessions=lists_sessions.extra_sessions
         channel=channel_sessions.get(session,None)
         print(f"Processing session {session}, channel {channel}...")
         
-        data,ripples=load_experimental_data(path,session, downsample = False, normalize = True, numSamples = False, 
-                           start = 0, verbose=True, original_fs=30000,channel=channel,
-                           offset=0.16,load_data=True)
-        
+        if session in extra_sessions:
+            data,ripples=load_experimental_data(path,session, downsample = False, normalize = True, numSamples = False, 
+                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=liset_tk_extra)
+
+        else:
+            data,ripples=load_experimental_data(path,session, downsample = False, normalize = True, numSamples = False, 
+                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=read_data)        
         out = process_and_detect(data, fs=fs, alpha=alpha, **process_kwargs)
         # store compact serializable summary
         results[session] = {
@@ -182,29 +187,31 @@ def detect_and_save_sessions(
 
 
 if __name__ == "__main__":
-    path=r"C:\Madrid_tests"
-    session_set={"2025-09-22_17-55-26", #R
-                "2025-09-23_15-50-26", #R
-                "2025-09-24_10-24-40", #R
-                "2025-09-24_14-22-55", #H
-                "2025-09-24_15-13-10", #H
-                "2025-09-25_16-41-14"} #R
+    path=r"C:\PedroFelix\extra_data\original_data"
+    # session_set={"2025-09-22_17-55-26", #R
+    #             "2025-09-23_15-50-26", #R
+    #             "2025-09-24_10-24-40", #R
+    #             "2025-09-24_14-22-55", #H
+    #             "2025-09-24_15-13-10", #H
+    #             "2025-09-25_16-41-14"} #R
 
-    # Extra
-    #     session_set={"2025-09-24_16-29-07", #R   
-    #             "2025-09-24_17-38-17",} #R 
-    session_set.update({ 
-        "2025-09-24_16-29-07", #R   
-        "2025-09-24_17-38-17", #R 
-        "2025-09-22_17-42-27", 
-        "2025-09-23_16-17-52", 
-        "2025-09-24_11-34-51",
-        "2025-09-25_11-21-53",
-        "2025-09-25_12-52-22",})
-    
-    detect_and_save_sessions(
-        path,
-        session_set,
-        fs=30000,
-        alpha=8.0,
-    )
+    # # Extra
+    # #     session_set={"2025-09-24_16-29-07", #R   
+    # #             "2025-09-24_17-38-17",} #R 
+    # session_set.update({ 
+    #     "2025-09-24_16-29-07", #R   
+    #     "2025-09-24_17-38-17", #R 
+    #     "2025-09-22_17-42-27", 
+    #     "2025-09-23_16-17-52", 
+    #     "2025-09-24_11-34-51",
+    #     "2025-09-25_11-21-53",
+    #     "2025-09-25_12-52-22",})
+    session_set=lists_sessions.extra_sessions
+    alphas=[3.0,4.0,5.0,6.0,7.0,8.0]
+    for alpha in alphas:
+        detect_and_save_sessions(
+            path,
+            session_set,
+            fs=30000,
+            alpha=alpha,
+        )

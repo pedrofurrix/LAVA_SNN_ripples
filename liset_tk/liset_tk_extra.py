@@ -17,14 +17,18 @@ import numpy as np
 from scipy.io import loadmat
 from copy import deepcopy
 
-ROOT_DIR=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-print(ROOT_DIR)
+ROOT_DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# print(ROOT_DIR)
 if not ROOT_DIR in sys.path:
-    sys.path.append(ROOT_DIR)
+    sys.path.insert(0, ROOT_DIR)
+LISET_DIR=os.path.dirname(os.path.abspath(__file__))
+# if not LISET_DIR in sys.path:
+#     sys.path.append(LISET_DIR)
 
-from raster_plots.load_data.liset_aux import *
-from raster_plots.load_data.load_data import *
-from raster_plots.load_data.signal_aid import *
+
+from liset_tk.liset_aux import *
+from liset_tk.load_data import *
+from liset_tk.signal_aid import *
 
 
 
@@ -41,7 +45,7 @@ class liset_tk_extra():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
      
-    def __init__(self, data_path, name, shank=None, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,channels=None,load_data=True,scale_data=False):
+    def __init__(self, data_path, name, shank=None, downsample = False, normalize = False, numSamples = False, start = 0, verbose=True, original_fs=30000,channels=None,load_data=True,scale_data=False):
         self.data_path=os.path.join(data_path,name)
 
         if shank is None:
@@ -58,7 +62,7 @@ class liset_tk_extra():
         self.scale_data=scale_data
         self.channel_num=32
         self.channels=channels
-
+        self.name=name
         if not self.numSamples:
             self.numSamples = np.inf # read the whole file
 
@@ -100,8 +104,8 @@ class liset_tk_extra():
         try:
             filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
             file_len = os.path.getsize(filename=filename)
-            file_samples = file_len // (self.channel_num * 2)
-            duration = file_samples / self.original_fs
+            self.file_samples = file_len // (self.channel_num * 2)
+            duration = self.file_samples / self.original_fs
             return duration
         except:
             if self.verbose:
@@ -349,7 +353,7 @@ class liset_tk_extra():
         plt.show()
 
 if __name__ == "__main__":
-    data_path=r"E:\extra_data"
+    data_path=r"C:\PedroFelix\extra_data\original_data"
     name="Calbai32FPGA_251003_144832"
     data=liset_tk_extra(data_path,name,shank=None,downsample=4000,normalize=True,start=0,numSamples=False,verbose=True)
     data.plot_visualize(ch=[0],offset=5,filtered=(100,250),extend=0.5,title='Overview',window=None)

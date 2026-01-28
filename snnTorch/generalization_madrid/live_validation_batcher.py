@@ -6,16 +6,18 @@ from torch.utils.data import TensorDataset, DataLoader
 import pickle as pkl
 
 import sys
-curr_dir = os.getcwd()
-parent_dir = os.path.abspath(os.path.join(curr_dir, os.pardir,os.pardir))
-sys.path.append(parent_dir)  # Add parent directory to path for importing Net
+ROOT_DIR=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if ROOT_DIR not in os.sys.path:
+    sys.path.append(ROOT_DIR)
 
 from snnTorch.utils.start_net import Net
 from liset_tk.read_data import read_data
-from lists_sessions import *
+from liset_tk.liset_tk_extra import liset_tk_extra
+from liset_tk.lists_sessions import *
 from process_signal import load_experimental_data, spikify_signal
 import json
-from tqdm import tqdm   
+from tqdm import tqdm  
+
 def run_inference(
         prefix,
         data_path,
@@ -64,17 +66,29 @@ def run_inference(
         channel = channel_sessions.get(session, None)
         if channel is None:
             raise ValueError(f"No channel mapping provided for session {session}")
-
-        # Load signal + ripples
-        filtered_signal, ripples = load_experimental_data(
-            data_path,
-            session,
-            channel=channel,
-            load_data=True,
-            downsample=False,
-            normalize=True,
-            offset=0.16,
-        )
+        if session in extra_sessions:
+            
+            # Load signal + ripples
+            filtered_signal, ripples = load_experimental_data(
+                data_path,
+                session,
+                channel=channel,
+                load_data=True,
+                downsample=False,
+                normalize=True,
+                data_reader=liset_tk_extra,
+            )
+        else:
+            # Load signal + ripples
+            filtered_signal, ripples = load_experimental_data(
+                data_path,
+                session,
+                channel=channel,
+                load_data=True,
+                downsample=False,
+                normalize=True,
+                data_reader=read_data,
+            )
 
         # Convert to spikes
         spk, threshold = spikify_signal(

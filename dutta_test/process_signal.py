@@ -1,4 +1,6 @@
 from liset_tk.read_data import read_data
+from liset_tk.liset_tk_extra import liset_tk_extra
+
 import os
 from liset_tk.signal_aid import bandpass_filter
 from snnTorch.generalization_madrid.utils import *
@@ -9,31 +11,38 @@ import numpy as np
 from scipy.signal import butter, filtfilt, hilbert
 
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
-                           start = 0, verbose=True, original_fs=30000,channel=None,
-                           invert=False,offset=0.16,load_data=True):
+                           start = 0, verbose=True, channel=None,load_data=True,data_reader=read_data):
     
-    try:
-        session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
-    except Exception as e:
-        print(f"⚠️ Skipping {name} - invalid format: {e}")
-        return None
+    # try:
+    #     session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
+    # except Exception as e:
+    #     print(f"⚠️ Skipping {name} - invalid format: {e}")
+    #     return None
     
     
     # determine invert rule
-    invert = session_date >= 24
+    # invert = session_date >= 24
 
-    liset=read_data(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
-                           start = start, verbose=verbose, original_fs=original_fs,channel_num=None,
-                           invert=invert,offset=offset,load_data=load_data,channels=[channel-1])
+    liset=data_reader(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
+                           start = start, verbose=verbose,load_data=load_data,channels=[channel-1])
     
-    filtered_signal = None
     if load_data:
         channel_data= liset.data[:].reshape(-1)
-        # filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
     else:
         channel_data=None
-    ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
-
+        
+    if hasattr(liset,'annotated') and hasattr(liset.annotated,'ripples_GT'):
+        ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
+    elif hasattr(liset,'ripples_GT'):
+        ripples=liset.ripples_GT
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
     return channel_data, ripples
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 

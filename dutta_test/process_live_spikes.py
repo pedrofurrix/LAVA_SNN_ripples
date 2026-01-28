@@ -7,12 +7,14 @@ import re
 
 # Add parent directories to path to import project modules
 curr_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(curr_dir, os.pardir))
-sys.path.append(project_root)
+ROOT_DIR = os.path.abspath(os.path.join(curr_dir, os.pardir))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
 from dutta_test.process_signal import load_experimental_data
 import liset_tk.lists_sessions as lists_sessions
-
+from liset_tk.read_data import read_data
+from liset_tk.liset_tk_extra import liset_tk_extra
 def compute_metrics_single_channel(
     spikes_ms, 
     ripples_ms, 
@@ -125,7 +127,8 @@ def compute_metrics_single_channel(
 
 def process_live_results(
     spikes_pkl_path,
-    data_path,
+    data_path_original,
+    data_path_extra,
     tolerance=20,
     max_detection_offset=100,
     fp_grouping_window=50,
@@ -158,21 +161,38 @@ def process_live_results(
         # Load GT ripples
         # We use load_experimental_data to get ripples. 
         # Note: This loads the signal too, which might be slow.
-        try:
-            # Suppress stdout from load_experimental_data if verbose
-            # sys.stdout = open(os.devnull, 'w') 
-            _, ripples = load_experimental_data(
-                data_path,
-                session,
-                channel=channel,
-                load_data=False, 
-                verbose=False
-            )
-            # sys.stdout = sys.__stdout__
-        except Exception as e:
-            print(f"  Error loading data for {session}: {e}")
-            continue
-            
+        if session in lists_sessions.extra_sessions:
+            try:
+                # Suppress stdout from load_experimental_data if verbose
+                # sys.stdout = open(os.devnull, 'w') 
+                _, ripples = load_experimental_data(
+                    data_path_extra,
+                    session,
+                    channel=channel,
+                    load_data=False, 
+                    verbose=False,
+                    data_reader=liset_tk_extra
+                )
+                # sys.stdout = sys.__stdout__
+            except Exception as e:
+                print(f"  Error loading data for {session}: {e}")
+                continue
+        else:
+            try:
+                # sys.stdout = open(os.devnull, 'w') 
+                _, ripples = load_experimental_data(
+                    data_path_original,
+                    session,
+                    channel=channel,
+                    load_data=False, 
+                    verbose=False,
+                    data_reader=read_data
+                )
+                # sys.stdout = sys.__stdout__
+            except Exception as e:
+                print(f"  Error loading data for {session}: {e}")
+                continue
+        
         if ripples is None:
             ripples_ms = np.empty((0, 2))
         else:
@@ -224,7 +244,8 @@ if __name__ == "__main__":
     # Configuration
     # Path to the directory containing spike pickle files (searches recursively)
     SPIKES_ROOT = os.path.join(curr_dir, "spikes")
-    DATA_PATH = r"C:\Madrid_tests" # Update this if different
+    DATA_PATH_ORIGINAL = r"C:\Madrid_tests" # Update this if different
+    DATA_PATH_EXTRA = r"C:\PedroFelix\extra_data\original_data" # Update this if different
     OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics.csv")
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
@@ -250,7 +271,8 @@ if __name__ == "__main__":
                 try:
                     df = process_live_results(
                         pkl_path,
-                        DATA_PATH,
+                        data_path_original=DATA_PATH_ORIGINAL,
+                        data_path_extra=DATA_PATH_EXTRA,
                         tolerance=20,
                         max_detection_offset=100,
                         fp_grouping_window=100,

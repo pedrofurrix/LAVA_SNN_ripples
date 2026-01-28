@@ -27,11 +27,12 @@ from liset_tk.load_data import *
 from liset_tk.signal_aid import *
 import pickle as pkl
 
-
-
-
-from liset_tk.gt_annotations import *
-import liset_tk.lists_sessions as lists_sessions
+try:
+    from liset_tk.gt_annotations import *
+    import liset_tk.lists_sessions as lists_sessions
+except (ImportError, ModuleNotFoundError):
+    import lists_sessions as lists_sessions
+    from gt_annotations import *
 
 class read_data():
     """

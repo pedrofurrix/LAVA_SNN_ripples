@@ -5,7 +5,10 @@ import h5py
 import sys
 import os
 
-import liset_tk.bz_LoadBinary as bz_LoadBinary
+try:
+    import liset_tk.bz_LoadBinary as bz_LoadBinary
+except (ImportError, ModuleNotFoundError):
+    import bz_LoadBinary as bz_LoadBinary
 
 
 def load_info (path):

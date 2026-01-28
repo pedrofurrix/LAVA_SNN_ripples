@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'liset_tk/')
-from liset_tk import liset_tk
+from liset_tk import original_data_reader
 import matplotlib.pyplot as plt
 import os
 
@@ -17,7 +17,7 @@ plt.style.use('seaborn-v0_8-paper')
 
 for ax, session in zip(axes, sessions):
     path = os.path.join(parent, session)
-    liset = liset_tk(data_path=path, shank=3, downsample=4000, verbose=False)
+    liset = original_data_reader(data_path=path, shank=3, downsample=4000, verbose=False)
 
     total_ripples = 0
     for i in liset.ripples_GT:
