@@ -29,6 +29,8 @@ LISET_DIR=os.path.dirname(os.path.abspath(__file__))
 from liset_tk.liset_aux import *
 from liset_tk.load_data import *
 from liset_tk.signal_aid import *
+import liset_tk.lists_sessions as lists_sessions
+from liset_tk.gt_annotations import get_ripple_events,configs
 
 
 
@@ -45,7 +47,7 @@ class liset_tk_extra():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
      
-    def __init__(self, data_path, name, shank=None, downsample = False, normalize = False, numSamples = False, start = 0, verbose=True, original_fs=30000,channels=None,load_data=True,scale_data=False):
+    def __init__(self, data_path, name, shank=None, downsample = False, normalize = False, numSamples = False, start = 0, verbose=True, original_fs=30000,channels=None,load_data=True,scale_data=False,annotation_type="manual_GT"):
         self.data_path=os.path.join(data_path,name)
 
         if shank is None:
@@ -120,7 +122,25 @@ class liset_tk_extra():
 
         return in_chunk
 
-
+    def get_gt_annotations(self,):
+        self.manual_GT=self.ripples_GT
+        if self.annotation_type is not None:
+            if self.annotation_type=="manual_GT":
+                pass
+            else:
+                
+                if hasattr(self, 'data'):
+                    channel=lists_sessions.channel_sessions[self.name]-1
+                    if self.data.shape[1]>1:
+                        channel=self.channels_shank.index(channel)
+                else:
+                    self.load(self.data_path, shank=None, downsample = False, normalize=self.normalize,invert=False, channels=[channel])
+                    channel=0
+                info=get_ripple_events(self.data[:,channel],self.fs,config=self.annotation_type)
+                #get start and end times from annnotations...
+                ripple_idx = info[["start_idx","end_idx"]].to_numpy()
+            self.ripples_GT=ripple_idx    
+    
     def load_dat(self, path, channels, numSamples = False, verbose=False):
         """
         Load data from a .dat file.
@@ -208,12 +228,12 @@ class liset_tk_extra():
         """
         if self.channels is None:
             self.channels=[24,20,23,27,25,21,22,26,28,16,19,31,29,17,18,30,15,3,0,12,14,2,1,13,11,7,4,8,10,6,5,9]
-            channels_shank = self.channels[(shank-1)*8 : shank*8]
+            self.channels_shank = self.channels[(shank-1)*8 : shank*8]
         else:
-            channels_shank=self.channels
+            self.channels_shank=self.channels
         
         
-        raw_data = self.load_dat(data_path, channels_shank, numSamples=self.numSamples)
+        raw_data = self.load_dat(data_path, self.channels_shank, numSamples=self.numSamples)
 
         if hasattr(raw_data, 'shape'):
             self.data = self.clean(raw_data, downsample, normalize)

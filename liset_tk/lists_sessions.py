@@ -154,3 +154,6 @@ for session in annotated_sessions:
         sessions_before_25.add(session)
     else:
         sessions_after_24.add(session)
+
+Ripple_sessions.update(extra_sessions)
+annotated_sessions.update(extra_sessions)

@@ -109,5 +109,5 @@ if __name__ == "__main__":
 
     sessions=lists_sessions.extra_sessions
     channel_sessions=lists_sessions.channel_sessions
-    for threshold in [0.3,0.4,0.5,0.6,0.7]:
+    for threshold in [0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]:
         run_detection_cnn(threshold,path,sessions,channel_sessions)

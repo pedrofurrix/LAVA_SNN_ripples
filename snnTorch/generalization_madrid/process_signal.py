@@ -18,6 +18,8 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
 
     filtered_signal = None
     if load_data:
+        if liset.data.shape[1]>1:
+            print("⚠️More than one channel loaded, please select a single channel.")
         channel_data= liset.data[:].reshape(-1)
         filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
     

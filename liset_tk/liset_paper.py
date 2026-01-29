@@ -28,7 +28,8 @@ from liset_tk.format_predictions import get_predictions_indexes
 from liset_tk.liset_aux import *
 from liset_tk.load_data import *
 from liset_tk.signal_aid import *
-
+import liset_tk.lists_sessions as lists_sessions
+from liset_tk.gt_annotations import get_ripple_events,configs
 
 
 
@@ -45,7 +46,7 @@ class liset_paper():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
      
-    def __init__(self, data_path, shank, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,load_data=True):
+    def __init__(self, data_path, shank, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, original_fs=30000,load_data=True,channels=None,scale_data=False,annotation_type=None):
 
         # Set the verbose
         self.verbose = verbose
@@ -58,16 +59,16 @@ class liset_paper():
         else:
             self.fs_conv_fact = 1
 
-        self.fs=self.original_fs if not downsample else self.downsampled_fs
+            self.fs=self.original_fs if not downsample else self.downsampled_fs
 
         # Initialize class variables.
-        self.prediction_times = []
-        self.model = None
-        self.default_channels = [16, 4, 1, 13, 15, 3, 2, 14]
-        
+        self.channels=channels
+        self.scale_data=scale_data
+        self.annotation_type=annotation_type    
+
         # Load the data.
         if load_data:
-            self.load(data_path, shank, downsample = downsample, normalize=normalize)
+            self.load(data_path, shank, downsample = downsample, normalize=normalize, channels=channels)
         else:
             self.file_samples = self.get_file_samples(data_path) # get file samples without loading data
         
@@ -84,6 +85,7 @@ class liset_paper():
                 self.has_ripplesGT = True
                 self.num_ripples = len(self.ripples_GT)
                 self.ripples_GT = ((self.ripples_GT- start) / self.fs_conv_fact).astype(int)
+                self.get_gt_annotations()
 
     @plain_plot
     @hide_y_ticks_on_offset
@@ -225,24 +227,20 @@ class liset_paper():
         if show:
             return fig, ax
         
+    def get_gt_annotations(self,):
+        self.manual_GT=self.ripples_GT
+        if self.annotation_type is not None:
+            if self.annotation_type=="manual_GT":
+                return self.ripples_GT # Samples
+            else:
+                channel=0
+                if not hasattr(self, 'data'):
+                    self.load(self.data_path, shank=None, downsample = False, normalize=self.normalize,invert=False, channels=[channel])
+                info=get_ripple_events(self.data[:,channel],self.fs,config=self.annotation_type)
+                #get start and end times from annnotations...
+                ripple_idx = info[["start_idx","end_idx"]].to_numpy()
+                self.ripples_GT=ripple_idx    
     
-    def load_predictions(self, preds):
-        if not isinstance(preds, np.ndarray):
-            preds = np.array(preds)
-        if np.mean(preds[1] - preds[0]) < 1:
-            conv_fact = 1
-            self.prediction_times = preds
-            self.prediction_idxs = (preds * self.fs).astype(int)
-        else:
-            conv_fact = self.fs
-            self.predition_idxs = preds
-            self.prediction_times = preds / self.fs
-
-        if hasattr(self, "window_interval"):
-            mask = (preds[:, 1] >= self.window_interval[0] / conv_fact) & (preds[:, 0] <= self.window_interval[1] / conv_fact)
-            self.prediction_times_from_window = preds[mask]
-        
-
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
             numSamples = self.file_samples-start
@@ -293,8 +291,8 @@ class liset_paper():
         try:
             filename = f"{path}/{[i for i in os.listdir(path) if i.endswith('.dat')][0]}"
             self.file_len = os.path.getsize(filename=filename)
-            num_channels_raw = 8 if channels is not self.second_shank_channels else 43
-            self.file_samples = self.file_len / num_channels_raw / 2
+            num_channels_raw = 8
+            self.file_samples = self.file_len // (num_channels_raw * 2)
         except:
             if self.verbose:
                 print('.dat file not in path')
@@ -335,7 +333,7 @@ class liset_paper():
             return data
             
 
-    def load(self, data_path, shank, downsample, normalize):
+    def load(self, data_path, shank, downsample, normalize, channels=None):
         """
         Load all, optionally downsample and normalize it.
 
@@ -357,16 +355,19 @@ class liset_paper():
         except:
             print('.mat file cannot be opened or is not in path.')
             info=None
-
-        self.second_shank_channels=[29, 17, 20, 32, 30, 18, 19, 31]
+        
+        # self.second_shank_channels=[29, 17, 20, 32, 30, 18, 19, 31]
         try:
-            if info is not None:
-                if "neurosparkmat" in info:
-                    channels = info['neurosparkmat']['channels'][0][0][shank-1:shank]
-                else: 
-                    channels=[i for i in range(8)]
+            if channels is not None:
+                channels=channels
             else:
-                channels=self.second_shank_channels
+                if info is not None:
+                    if "neurosparkmat" in info:
+                        channels = info['neurosparkmat']['channels'][0][0][shank-1:shank]
+                    else: 
+                        channels=[i for i in range(8)]
+                # else:
+                #     channels=self.second_shank_channels
         except Exception as err:
             print(f'No data available for shank {shank}\n\n{err}')
             return 
@@ -411,349 +412,14 @@ class liset_paper():
             if self.verbose:
                 print("Done!")
                 print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
+
+     
+        if self.scale_data and not normalize:
+            self.bit_uvolts=0.1949999928 # uV per bit for Intan RHD2000 series
+            self.ttl_bit_volts=0.0001525879 # Volts per bit for Intan RHD2000 series TTL channels
+            data = data[:,:8] * self.bit_uvolts *1e-6 # Convert to volts
+            # if self.channel_num==40 and 32 in self.channels:
+            #     data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to volts
+        return data
      
         return data
-
-    @plain_plot
-    @hide_y_ticks_on_offset
-    def downsample_several(self,event, 
-                offset=0, 
-                extend=0, 
-                delimiter=False, 
-                show=True, 
-                filtered=[], 
-                title='', 
-                label='', 
-                ch=False,
-                ylim=False,
-                line_color=False,
-                show_ground_truth=False, 
-                show_predictions=False, 
-                plain=False,
-                downsampled_fs=[]):
-        """
-        Plot different downsample methods.
-
-        Parameters:
-        - event ([start_s,end_s]): Start and End Times of the plot (s)
-        - offset (float): Offset between channels for visualization.
-        - extend (float _ s): Extend the plotted time range before and after the ripple.
-        - delimiter (bool): Whether to highlight the ripple area.
-
-        Returns:
-        - fig (matplotlib.figure.Figure): The generated figure.
-        - ax (matplotlib.axes.Axes): The axes object containing the plot.
-        """
-        all_fs=[self.original_fs] + downsampled_fs  # Include original fs
-        n = len(all_fs)
-        # print(all_fs)
-        if show:
-            fig, axes = plt.subplots(nrows=n, figsize=(10, 3.2 * n), sharex=True, constrained_layout=True)
-        
-        if n == 1:
-            axes= [axes]  # Ensure axes is iterable if there's only one subplot
-        for i,downsampled_f in enumerate(all_fs):
-            ax=axes[i]
-            if downsampled_f==self.original_fs:
-                downsampled_data=self.data
-
-                title_plt=f'Original Data ({downsampled_f} Hz)'
-            else:
-                downsampled_data=downsample_data(self.data, self.original_fs, downsampled_f)
-                title_plt=f'Downsampled Data ({downsampled_f} Hz)'	
-
-            prop = self.original_fs/downsampled_f
-            interval = deepcopy(event)
-            handles = []
-            labels = []
-            interval_samples=[int(interval[0]*downsampled_f), int(interval[1]*downsampled_f)]
-
-            try:
-                if extend != 0:
-                    if (interval[0] - extend) < 0:
-                        interval_samples[0] = int(self.start/prop)
-                    else:
-                        interval_samples[0] = interval_samples[0] - extend*downsampled_f
-
-                    if (interval[1] + extend)*downsampled_f > (self.start+self.numSamples/prop):
-                        interval_samples[1] = int((self.start+ self.numSamples)/prop)
-                    else:
-                        interval_samples[1] = interval_samples[1] + extend*downsampled_f
-                interval=[int(x) for x in interval_samples]
-            
-            except IndexError:
-                print('IndexError')
-                print(f'There no data available for the selected samples.\nLength of loaded data: {int(self.numSamples/prop)}')
-                return None, None
-            
-                # Define window data
-            self.window_interval = interval
-            ripples=self.ripples_GT/prop       
-            mask = (ripples[:, 1] >= interval[0]) & (ripples[:, 0] <= interval[1])
-            window_ripples = ripples[mask]
-
-            interval_data = downsampled_data[interval[0]: interval[1]][:]
-            self.window = deepcopy(interval_data)
-            
-            time_vector = np.linspace(interval[0] / downsampled_f, interval[1] / downsampled_f, interval_data.shape[0])
-            
-            for i, chann in enumerate(interval_data.transpose()):
-                if filtered:
-                    bandpass = filtered
-                    chann = bandpass_filter(chann, bandpass, downsampled_f)
-                    self.window[:, i] = chann
-                if show:
-                    if ch:
-                        if i in ch:
-                            if line_color:
-                                ax.plot(time_vector, chann + i * offset, line_color)
-                            else:
-                                ax.plot(time_vector, chann + i * offset)
-                    else:
-                        if line_color:
-                            ax.plot(time_vector, chann + i * offset, line_color)
-                        else:
-                            ax.plot(time_vector, chann + i * offset)
-                
-                if ylim:
-                    ax.set_ylim(ylim)
-                    
-
-            max_val = np.max(self.window.reshape((self.window.shape[0]*self.window.shape[1]))) + offset*8
-            min_val = np.min(self.window.reshape((self.window.shape[0]*self.window.shape[1])))
-
-            if delimiter and show:
-                if extend > 0:
-                    ripple_area = [time_vector[round(extend)], time_vector[-round(extend)]]
-                    if not label:
-                        label='Event area'
-                    fill_DEL = ax.fill_between(ripple_area, min_val, max_val, color="tab:blue", alpha=0.2)
-                    handles.append(fill_DEL)
-                    labels.append(label)
-                else:
-                    if self.verbose:
-                        print('Delimiter not applied because there is no extend.')
-
-            if show_ground_truth:
-                if hasattr(self.ripples_GT, 'dtype'):
-                    for ripple in window_ripples:
-                        fill_GT = ax.fill_between([ripple[0] / downsampled_f, ripple[1] / downsampled_f],  min_val, max_val, color="tab:red", alpha=0.3)
-
-                if 'fill_GT' in locals():
-                    handles.append(fill_GT)
-                    labels.append('Ground truth' if not label else label)
-
-            if show_predictions:
-                if hasattr(self, 'prediction_idxs'):
-                    mask = (self.prediction_idxs[:, 1] >= interval[0]) & (self.prediction_idxs[:, 0] <= interval[1])
-                    self.prediction_times_from_window = self.prediction_times[mask]
-                    for times in self.prediction_times_from_window:
-                        fill_PRED = ax.fill_between([times[0], times[1]], min_val, max_val, color="tab:blue", alpha=0.3)
-
-                if 'fill_PRED' in locals():
-                    handles.append(fill_PRED)
-                    labels.append(f'{self.model_type} predict')
-
-            ax.set_xlabel('Time (s)')
-            ax.set_ylabel('Amplitude (mV)')
-
-            if not len(handles) == 0:        
-                ax.legend(handles, labels)
-
-            text = ax.set_title(title_plt, loc='center', fontfamily='serif', fontsize=12, fontweight='bold')
-            ax.grid(True)
-        self.fig = fig
-        self.axes = axes
-        plt.suptitle(f"Testing Downsampling at Different Frequencies", fontsize=16, fontweight='bold', fontfamily='serif')
-
-        if show:
-            return fig, axes
-    
-    def test_filtering(self,event, 
-                offset=0, 
-                extend=0, 
-                delimiter=False, 
-                show=True, 
-                filtered=[], 
-                title='', 
-                label='', 
-                ch=False,
-                ylim=False,
-                line_color=False,
-                show_ground_truth=False, 
-                show_predictions=False, 
-                plain=False,
-                bp_filters=[False,[1,10],[100,250],[250,500]],
-                order=4,
-                downsampled_fs=[],
-                ):
-        """
-        Plot different downsample methods.
-
-        Parameters:
-        - event ([start_s,end_s]): Start and End Times of the plot (s)
-        - offset (float): Offset between channels for visualization.
-        - extend (float _ s): Extend the plotted time range before and after the ripple.
-        - delimiter (bool): Whether to highlight the ripple area.
-
-        Returns:
-        - fig (matplotlib.figure.Figure): The generated figure.
-        - ax (matplotlib.axes.Axes): The axes object containing the plot.
-        """
-        
-        n=len(bp_filters)
-
-        all_fs=[self.fs] + downsampled_fs  # Include original fs
-        
-
-        
-        if show:
-            fig, axes = plt.subplots(nrows=n, ncols=len(all_fs),figsize=(10, 3.2 * n), sharex=True, constrained_layout=True)
-        
-        # Normalize axes to 2D array
-        if n == 1 and len(all_fs) == 1:
-            axes = np.array([[axes]])
-        elif n == 1:
-            axes = np.expand_dims(axes, axis=0)
-        elif len(all_fs) == 1:
-            axes = np.expand_dims(axes, axis=1)
-
-
-        for j,downsampled_f in enumerate(all_fs):
-            if downsampled_f == self.fs:
-                # title = f"Original ({downsampled_f} Hz)"
-                data=self.data
-            else:
-                # title = f"Downsampled ({downsampled_f} Hz)"
-                data=downsample_data(self.data, self.fs, downsampled_f)
-            
-            # print(downsampled_f)
-            # fig.text(
-            #     0.1 + j * (0.8 / len(all_fs)),  # X position
-            #     1.0,                             # Y position (top of figure)
-            #     title,
-            #     ha='center',
-            #     va='bottom',
-            #     fontsize=12,
-            #     fontweight='bold',
-            #     fontfamily='serif'
-            # )
-
-            for i,bandpass in enumerate(bp_filters):
-                ax=axes[i,j]
-                print(bandpass)
-                if not bandpass:
-                    title_plt = f'Original Data({downsampled_f} Hz)'
-                    filtered_data = data.copy()
-                else:
-                    filtered_data = np.zeros_like(data)
-                    for idx in range(data.shape[1]):
-                        filtered_data[:, idx] = bandpass_filter(data[:, idx], bandpass=bandpass, fs=downsampled_f, order=order)
-                    title_plt = f'Bandpassed Data ({bandpass[0]}–{bandpass[1]} Hz)'
-                    
-                    print(f"Filtered successfully - {bandpass[0]}-{bandpass[1]} Hz")
-                    title_plt=f'Bandpassed Data ({bandpass[0]}_{bandpass[1]} Hz)'	
-
-                prop = self.original_fs/downsampled_f
-                prop_2=self.fs/downsampled_f
-                interval = deepcopy(event)
-                handles = []
-                labels = []
-                interval_samples=[int(interval[0]*downsampled_f), int(interval[1]*downsampled_f)]
-
-                try:
-                    if extend != 0:
-                        if (interval[0] - extend) < 0:
-                            interval_samples[0] = int(self.start/prop)
-                        else:
-                            interval_samples[0] = interval_samples[0] - extend*downsampled_f
-
-                        if (interval[1] + extend)*downsampled_f > (self.start+self.numSamples/prop):
-                            interval_samples[1] = int((self.start+ self.numSamples)/prop)
-                        else:
-                            interval_samples[1] = interval_samples[1] + extend*downsampled_f
-                    interval=[int(x) for x in interval_samples]
-                
-                except IndexError:
-                    print('IndexError')
-                    print(f'There no data available for the selected samples.\nLength of loaded data: {int(self.numSamples/prop)}')
-                    return None, None
-                
-                    # Define window data
-                self.window_interval = interval
-                ripples=self.ripples_GT/prop_2     
-                mask = (ripples[:, 1] >= interval[0]) & (ripples[:, 0] <= interval[1])
-                window_ripples = ripples[mask]
-
-                interval_data = filtered_data[interval[0]: interval[1]][:]
-                self.window = deepcopy(interval_data)
-                
-                time_vector = np.linspace(interval[0]/downsampled_f, interval[1]/downsampled_f, interval_data.shape[0])
-                
-                for i, chann in enumerate(interval_data.transpose()):
-                    if show:
-                        if ch:
-                            if i in ch:
-                                if line_color:
-                                    ax.plot(time_vector, chann + i * offset, line_color)
-                                else:
-                                    ax.plot(time_vector, chann + i * offset)
-                        else:
-                            if line_color:
-                                ax.plot(time_vector, chann + i * offset, line_color)
-                            else:
-                                ax.plot(time_vector, chann + i * offset)
-                    
-                    if ylim:
-                        ax.set_ylim(ylim)
-                        
-
-                max_val = np.max(self.window.reshape((self.window.shape[0]*self.window.shape[1]))) + offset*8
-                min_val = np.min(self.window.reshape((self.window.shape[0]*self.window.shape[1])))
-
-                if delimiter and show:
-                    if extend > 0:
-                        ripple_area = [time_vector[round(extend)], time_vector[-round(extend)]]
-                        if not label:
-                            label='Event area'
-                        fill_DEL = ax.fill_between(ripple_area, min_val, max_val, color="tab:blue", alpha=0.2)
-                        handles.append(fill_DEL)
-                        labels.append(label)
-                    else:
-                        if self.verbose:
-                            print('Delimiter not applied because there is no extend.')
-
-                if show_ground_truth:
-                    if hasattr(self.ripples_GT, 'dtype'):
-                        for ripple in window_ripples:
-                            fill_GT = ax.fill_between([ripple[0] / downsampled_f, ripple[1] / downsampled_f],  min_val, max_val, color="tab:red", alpha=0.3)
-
-                    if 'fill_GT' in locals():
-                        handles.append(fill_GT)
-                        labels.append('Ground truth' if not label else label)
-
-                if show_predictions:
-                    if hasattr(self, 'prediction_idxs'):
-                        mask = (self.prediction_idxs[:, 1] >= interval[0]) & (self.prediction_idxs[:, 0] <= interval[1])
-                        self.prediction_times_from_window = self.prediction_times[mask]
-                        for times in self.prediction_times_from_window:
-                            fill_PRED = ax.fill_between([times[0], times[1]], min_val, max_val, color="tab:blue", alpha=0.3)
-
-                    if 'fill_PRED' in locals():
-                        handles.append(fill_PRED)
-                        labels.append(f'{self.model_type} predict')
-
-                ax.set_xlabel('Time (s)')
-                ax.set_ylabel('Amplitude (mV)')
-
-                if not len(handles) == 0:        
-                    ax.legend(handles, labels)
-
-                text = ax.set_title(title_plt, loc='center', fontfamily='serif', fontsize=12, fontweight='bold')
-                ax.grid(True)
-        self.fig = fig
-        self.axes = axes
-        plt.suptitle(f"Testing Filtering at Different Frequencies", fontsize=16, fontweight='bold', fontfamily='serif')
-
-        if show:
-            return fig, axes
