@@ -239,7 +239,7 @@ if __name__ == "__main__":
     # Configuration
     # Path to the directory containing spike pickle files (searches recursively)
     SPIKES_ROOT = os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "spikes")
-    DATA_PATH_ORIGINAL = r"C:\Madrid_tests" # Update this if different
+    DATA_PATH_ORIGINAL = r"C:\PedroFelix\Madrid_tests" # Update this if different
     DATA_PATH_EXTRA = r"C:\PedroFelix\extra_data\original_data" # Update this if different
     OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics.csv")
     

@@ -26,6 +26,7 @@ from liset_tk.liset_aux import *
 from liset_tk.load_data import *
 from liset_tk.signal_aid import *
 import pickle as pkl
+from datetime import datetime
 
 try:
     from liset_tk.gt_annotations import *
@@ -60,7 +61,7 @@ class read_data():
             print(f"Loading data from session: {name}")
         self.numSamples = numSamples
         self.start = start
-        
+        self.load_data=load_data
         self.annotated=RippleEvents(offset=offset)
         self.from_data=RippleEvents(offset=offset)
         self.normalize=normalize
@@ -80,8 +81,8 @@ class read_data():
 
  
 
-        # Load the data.
-        if load_data:
+        # Load the data
+        if self.load_data:
             self.load(self.oe_path, shank, downsample = downsample, normalize=normalize,invert=invert, channels=channels)
         else:
             self.load_only_ripples(self.oe_path,invert=invert)    
@@ -130,8 +131,9 @@ class read_data():
                     else:
                         channel=0
                 else:
-                    self.load(self.oe_path, shank=0, downsample = False, normalize=self.normalize,invert=False, channels=lists_sessions.channel_sessions[self.name]-1)
-                info=get_ripple_events(self.data[channel],self.fs,config=self.annotation_type)
+                    self.load(self.oe_path, shank=0, downsample = False, normalize=self.normalize,invert=False, channels=[lists_sessions.channel_sessions[self.name]-1])
+                    channel=0
+                info=get_ripple_events(self.data[:,channel],self.fs,config=self.annotation_type)
                 #get start and end times from annnotations...
                 ripple_idx = info[["start_idx","end_idx"]].to_numpy()
                 self.annotated.ripples_GT=ripple_idx    
@@ -267,11 +269,11 @@ class read_data():
         if hasattr(raw_data, 'shape'):
             self.data = self.clean(raw_data, downsample, normalize)
             self.duration = self.data.shape[0]/self.fs
-
-        self.load_annotations(self.annotation_path,self.name)
-        self.load_ripple_times(data_path,invert)
-        self.load_offline()
-        self.get_gt_annotations()
+        if self.load_data:
+            self.load_annotations(self.annotation_path,self.name)
+            self.load_ripple_times(data_path,invert)
+            self.load_offline()
+            self.get_gt_annotations()
 
     
 
@@ -626,6 +628,25 @@ class RippleEvents():
             self.snn_predicts = convert(self.snn_predicts-self.offset)
         if isinstance(self.light_stim, np.ndarray) and self.light_stim.size > 0:
             self.light_stim = convert(self.light_stim)
+
+
+
+if __name__ == "__main__":
+    import lists_sessions
+    data_path=r"E:\Madrid_tests"
+    name="2025-09-22_17-55-26"#
+    try:
+        session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
+    except Exception as e:
+        print(f"⚠️ Skipping {name} - invalid format: {e}")
+
+
+    invert = session_date >= 24
+
+    channel=lists_sessions.channel_sessions.get(name, None)
+    liset=read_data(data_path, name, downsample=1250, normalize=False, invert=invert,offset=0.215,load_data=True,channels=[channel-1])
+    # print(liset.offline_detections[:10]/liset.fs)
+    liset.plot_offline(ch=[0,],offset=0.3,filtered=(100,250), extend=0.5, title=f'Session: {name}', window=None)
 
 
 
