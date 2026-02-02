@@ -313,9 +313,10 @@ class read_data():
                 print("Shape of loaded data after downsampling and z-score: ", np.shape(data))
 
         if self.scale_data and not normalize:
-            data = data[:,:32] * self.bit_uvolts *1e-6 # Convert to volts
+            data = data.astype(np.float32)
+            data[:,:32] *= (self.bit_uvolts * 1e-6) # Convert to volts
             if self.channel_num==40 and 32 in self.channels:
-                data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to volts
+                data[:,32:] *= self.ttl_bit_volts  # Convert TTL channel to volts
         return data
 
     def load_ripple_times(self,path,invert=False):

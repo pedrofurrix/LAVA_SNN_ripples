@@ -277,10 +277,10 @@ class liset_tk_extra():
         if self.scale_data and not normalize:
             self.bit_uvolts=0.1949999928
             self.ttl_bit_volts=0.0001525879
-            data = data[:,:32] * self.bit_uvolts *1e-6 # Convert to volts
+            data = data.astype(np.float32)
+            data[:,:32] *= (self.bit_uvolts * 1e-6) # Convert to volts
             if self.channel_num==40 and 32 in self.channels:
-                data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to volts
-
+                data[:,32:] *= self.ttl_bit_volts  # Convert TTL channel to volts
         return data
     
     def plot_visualize(self, ch=None, offset=0, filtered=None, extend=0.5, title='Overview', window=None):
