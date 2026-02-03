@@ -9,10 +9,15 @@ import re
 
 # Add path to project root
 curr_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(curr_dir, os.pardir, os.pardir))
-sys.path.append(project_root)
+ROOT_DIR= os.path.abspath(os.path.join(curr_dir, os.pardir, os.pardir))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
+from liset_tk.read_data import read_data
+from liset_tk.liset_tk_extra import liset_tk_extra
+import liset_tk.lists_sessions as lists_sessions
 from snnTorch.generalization_madrid.process_signal import load_experimental_data, ripple_band_power_trace
+
 
 def extract_events(spikes_ms, ripples_samp, fs=30000, tolerance_ms=20, max_offset_ms=100,extra_tolerance_ms=20, fp_grouping_ms=50):
     """
@@ -164,10 +169,11 @@ def extract_power_snippets(power_trace, events, event_type, window_samp, look_ar
 
 def run_power_analysis():
     # Configuration
-    SPIKES_ROOT = os.path.join(project_root, "snnTorch", "generalization_madrid", "spikes")
-    DATA_ROOT=os.path.join(project_root, "snnTorch", "generalization_madrid", "data")
+    SPIKES_ROOT = os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "spikes")
+    DATA_ROOT=os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "data")
     os.makedirs(DATA_ROOT, exist_ok=True)
-    DATA_PATH = r"C:\Madrid_tests"
+    DATA_PATH_ORIGINAL = r"C:\PedroFelix\Madrid_tests" # Update this if different
+    DATA_PATH_EXTRA = r"C:\PedroFelix\extra_data\original_data" # Update this if different
     OUTPUT_FILE = os.path.join(SPIKES_ROOT, "power_analysis_results.pkl")
     center="peak"
     # Analysis parameters
@@ -213,20 +219,36 @@ def run_power_analysis():
 
                         channel = data['channel']
                         spikes_ms = np.array(data['spikes'])
-                        
-                        # Load Signal
-                        try:
-                            filtered_signal, ripples = load_experimental_data(
-                                DATA_PATH,
-                                session,
-                                channel=channel,
-                                load_data=True,
-                                verbose=False,
-                                normalize=False
-                            )
-                        except Exception as e:
-                            print(f"  Error loading data for {session}: {e}")
-                            continue
+                        if session in lists_sessions.extra_sessions:
+                            # Load Signal
+                            try:
+                                filtered_signal, ripples = load_experimental_data(
+                                    DATA_PATH_EXTRA,
+                                    session,
+                                    channel=channel,
+                                    load_data=True,
+                                    verbose=False,
+                                    normalize=False,
+                                    data_reader=liset_tk_extra
+                                )
+                            except Exception as e:
+                                print(f"  Error loading data for {session}: {e}")
+                                continue
+                        else:
+                            # Load Signal
+                            try:
+                                filtered_signal, ripples = load_experimental_data(
+                                    DATA_PATH_ORIGINAL,
+                                    session,
+                                    channel=channel,
+                                    load_data=True,
+                                    verbose=False,
+                                    normalize=False,
+                                    data_reader=read_data
+                                )
+                            except Exception as e:
+                                print(f"  Error loading data for {session}: {e}")
+                                continue
                             
                         if filtered_signal is None or ripples is None:
                             continue
