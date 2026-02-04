@@ -56,8 +56,10 @@ def compute_metrics_single_channel(
     # Define valid detection windows for each ripple
     # Window: [start - tolerance, start + max_detection_offset + tolerance]
     # Note: max_detection_offset is usually relative to start.
-    
-    ripple_starts = ripples_ms[:, 0]
+    if ripples_ms.ndim == 1:
+        ripple_starts=ripples_ms
+    else:
+        ripple_starts = ripples_ms[:, 0]
     valid_windows = []
     for start in ripple_starts:
         w_start = start - tolerance
