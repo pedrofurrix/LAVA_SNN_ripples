@@ -20,6 +20,10 @@ import sys
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../utils/'))
 sys.path.insert(0,utils_path)
 
+ROOT_DIR=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# print(ROOT_DIR)
+if not ROOT_DIR in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io import loadmat
@@ -421,5 +425,101 @@ class liset_paper():
             # if self.channel_num==40 and 32 in self.channels:
             #     data= data[:,32:]* self.ttl_bit_volts  # Convert TTL channel to volts
         return data
+    
+    def plot_visualize(self, ch=None, offset=0, filtered=None, extend=0.5, title='Overview', window=None):
+        """
+        Plot data with overlays for:
+        - Ground truth ripples (yellow)
+        - Model predicted ripples (blue)
+        - Light stimulation TTLs (red)
+
+        Parameters
+        ----------
+        ch : int or list of ints, optional
+            Channel(s) to plot. If None, plots the first channel.
+        offset : float, optional
+            Vertical offset between channels.
+        filtered : tuple (low, high), optional
+            Bandpass filter range (Hz).
+        extend : float, optional
+            Extra context (in seconds) around each event.
+        title : str, optional
+            Title for the plot.
+        window : tuple (start, end), optional
+            Time window in seconds to plot (e.g., (10, 20)).
+        """
+
+        # ---------------------
+        # Select channels
+        # ---------------------
+        if ch is None:
+            ch = [0]
+        elif isinstance(ch, int):
+            ch = [ch]
+
+        n_samples = self.data.shape[0]
+        time = np.arange(n_samples) / self.fs
+
+        # ---------------------
+        # Apply time window
+        # ---------------------
+        if window is not None:
+            start_s, end_s = window
+            start_idx = int(start_s * self.fs)
+            end_idx = int(end_s * self.fs)
+            time = time[start_idx:end_idx]
+            data_slice = self.data[start_idx:end_idx, :]
+        else:
+            data_slice = self.data
+
+        fig, ax = plt.subplots(figsize=(15, 6))
+        plt.title(title)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude (normalized units)")
+
+        # ---------------------
+        # Plot data (optionally filtered)
+        # ---------------------
+        for i, ch_idx in enumerate(ch):
+            sig = deepcopy(data_slice[:, ch_idx])
+            if filtered:
+                from signal_aid import bandpass_filter
+                sig = bandpass_filter(sig, filtered, self.fs)
+
+            ax.plot(time, sig + i * offset, color="black", lw=0.8, label=f"Ch {ch_idx}" if i == 0 else "")
+
+        min_y, max_y = ax.get_ylim()
+
+        # ---------------------
+        # Helper function to plot intervals safely within window
+        # ---------------------
+        def plot_intervals(intervals, color, label):
+            if window is not None:
+                mask = (intervals[:, 1] / self.fs > start_s) & (intervals[:, 0] / self.fs < end_s)
+                intervals = intervals[mask]
+            for i, r in enumerate(intervals):
+                ax.fill_between(r / self.fs, min_y, max_y, color=color, alpha=0.3, label=label if i == 0 else "")
+
+        # ---------------------
+        # Ground truth ripples (yellow)
+        # ---------------------
+        if hasattr(self, "ripples_GT") and self.ripples_GT is not None:
+            plot_intervals(self.ripples_GT, "yellow", "Ground truth")
+        # ---------------------
+        # Beautify
+        # ---------------------
+        handles, labels = ax.get_legend_handles_labels()
+        unique = dict(zip(labels, handles))
+        ax.legend(unique.values(), unique.keys())
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
      
-        return data
+
+if __name__ == "__main__":
+    data_path=r"E:\NCN\neurospark_mat\Download_from_paper"
+    dataset="Som2_2019-07-24_12-01-49"
+    DATA_PATH=os.path.join(data_path,dataset)
+    liset=liset_paper(DATA_PATH,channels=[1],shank=1,downsample=4000)
+    liset.plot_visualize(0,filtered=(100,250))
