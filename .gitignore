@@ -7,3 +7,5 @@ snnTorch/generalization_madrid/data/power_analysis_results_center_peak.pkl
 liset_test/cnn_detections/*.pkl
 dutta_test/spikes/*.pkl
 /liset_tk/figures/pngs
+/dutta_test/figures
+/snnTorch/generalization_madrid/data

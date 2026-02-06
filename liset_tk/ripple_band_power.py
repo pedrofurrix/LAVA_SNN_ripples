@@ -26,10 +26,12 @@ def ripple_band_power_trace(signal, fs, bandpass=(100, 250), smooth_ms=10, log_p
     """
 
     # Bandpass filter
-    nyq = fs / 2
-    b, a = butter(4, [bandpass[0]/nyq, bandpass[1]/nyq], btype='band')
-    filtered = filtfilt(b, a, signal)
-
+    if bandpass is not None:
+        nyq = fs / 2
+        b, a = butter(4, [bandpass[0]/nyq, bandpass[1]/nyq], btype='band')
+        filtered = filtfilt(b, a, signal)
+    else:
+        filtered = signal
     # Hilbert transform to get analytic envelope
     analytic = hilbert(filtered)
     envelope = np.abs(analytic)

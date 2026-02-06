@@ -48,7 +48,7 @@ class read_data():
     - verbose (bool, optional): Whether to display verbose output. Default is True.
     """
     # TODO: There are still some problems - namely the annotation does not obey to 
-    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False,recording_node=1,annotation_type=None):
+    def __init__(self, data_path, name, shank=0, downsample = False, normalize = True, numSamples = False, start = 0, verbose=True, invert=False,offset=0.16,buffer_size=20,load_data=True, channels=None,scale_data=False,recording_node=1,annotation_type=None,remove_artifacts=False):
         
         self.oe_path=os.path.join(data_path,"Open Ephys",name)
         self.annotation_path=os.path.join(data_path,"annotations")
@@ -69,6 +69,7 @@ class read_data():
         self.channels=channels
         self.recording_node=recording_node
         self.annotation_type=annotation_type
+        self.remove_artifacts=remove_artifacts
         self.get_channel_num(self.oe_path)
 
 
@@ -84,12 +85,17 @@ class read_data():
         # Load the data
         if self.load_data:
             self.load(self.oe_path, shank, downsample = downsample, normalize=normalize,invert=invert, channels=channels)
+            self.artifact_removal()
         else:
             self.load_only_ripples(self.oe_path,invert=invert)    
+        
+        self.get_gt_annotations() # so that it's already done with the artifact removal (if needed)
 
         self._check_data()
         if self.verbose:
             print(f"✅ Loading complete!- session {name}")
+
+        
 
     def load_only_ripples(self,path,invert=False):
         try:
@@ -105,12 +111,13 @@ class read_data():
                 print('❗timestamps.npy file not in path❗, cannot load ripples.')
             return False
         self.numSamples=np.inf
-        self.fs = self.downsampled_fs
+        self.fs = self.downsampled_fs # Does it work when downsampling?
         
         self.load_annotations(self.annotation_path,self.name)
         self.load_ripple_times(self.oe_path,invert)
         self.load_offline()
-        self.get_gt_annotations()
+        # self.get_gt_annotations()
+        
     def ripples_in_chunk(self, ripples, start, numSamples, fs, prop):
         if not numSamples:
             numSamples = self.file_samples - self.start
@@ -126,12 +133,11 @@ class read_data():
                 return self.annotated.ripples_GT # Samples
             else:
                 if hasattr(self, 'data'):
-                    if self.data.shape[1]>1:
-                        channel=lists_sessions.channel_sessions[self.name]-1
-                    else:
-                        channel=0
+                    
+                    channel_og=lists_sessions.channel_sessions[self.name]-1
+                    channel = np.where(np.array(self.channels) == channel_og)[0][0]
                 else:
-                    self.load(self.oe_path, shank=0, downsample = False, normalize=self.normalize,invert=False, channels=[lists_sessions.channel_sessions[self.name]-1])
+                    self.load(self.oe_path, shank=0, downsample = self.downsampled_fs, normalize=self.normalize,invert=False, channels=[lists_sessions.channel_sessions[self.name]-1])
                     channel=0
                 info=get_ripple_events(self.data[:,channel],self.fs,config=self.annotation_type)
                 #get start and end times from annnotations...
@@ -226,8 +232,68 @@ class read_data():
                 except Exception as e:
                     print(f"Error reading structure.oebin: {e}")
                     self.channel_num=32  # default value
-    
+        if self.verbose:
+            print(f"Loaded {num_channels} channels, with a original frequency of {self.original_fs} Hz")
 
+    def artifact_removal(self):
+        channel_og=lists_sessions.channel_sessions[self.name]-1
+        channel = np.where(np.array(self.channels) == channel_og)[0][0]
+        if self.remove_artifacts:
+            if hasattr(self, "data"):
+                if not hasattr(self.from_data, "light_stim") or self.from_data.light_stim is None:
+                    print("⚠️ No light stimulation events loaded, cannot perform artifact removal.")
+                    return
+                stim_intervals = self.from_data.light_stim # samples
+
+                fs = self.fs
+                clean_data = self.data.copy().astype(np.float32)
+                buffer_samp = int(self.remove_artifacts* fs / 1000)
+                # Baseline check window
+                base_ms = 10.0
+                base_samp = int(base_ms * 1e-3 * fs)
+                for s, e in stim_intervals:
+                    # Safety check for indices
+                    if s - base_samp < 0 or e + base_samp >= len(clean_data):
+                        continue
+                    
+                    # --- 1. Level Alignment (remove DC shift) ---
+                    # Get median baseline just before and after the stim
+                    pre_base = clean_data[s - base_samp : s - buffer_samp, channel]
+                    post_base = clean_data[e + buffer_samp : e + base_samp, channel]
+                    
+                    # Get median level during stim (ignoring edges)
+                    if (e - buffer_samp) > (s + buffer_samp):
+                        stim_segment = clean_data[s + buffer_samp : e - buffer_samp, channel]
+                    else:
+                        # Stim too short for buffer, take center
+                        mid = (s + e) // 2
+                        stim_segment = clean_data[mid : mid+1, channel]
+
+                    target_level = (np.median(pre_base) + np.median(post_base)) / 2
+                    current_level = np.median(stim_segment)
+                    
+                    offset = current_level - target_level
+                    
+                    # Subtract the offset from the continuous block
+                    clean_data[s:e, channel] -= offset
+
+                    # --- 2. Linear Interpolation of Edges (Kill transients) ---
+                    # Interpolate across the ON transition [s - buffer, s + buffer]
+                    p_start = s - buffer_samp
+                    p_end   = s + buffer_samp
+                    if p_start >= 0 and p_end < len(clean_data):
+                        y_start = clean_data[p_start, channel]
+                        y_end   = clean_data[p_end, channel]
+                        clean_data[p_start:p_end, channel] = np.linspace(y_start, y_end, p_end - p_start)
+
+                    # Interpolate across the OFF transition [e - buffer, e + buffer]
+                    p_start = e - buffer_samp
+                    p_end   = e + buffer_samp
+                    if p_start >= 0 and p_end < len(clean_data):
+                        y_start = clean_data[p_start, channel] # Note: clean_data[p_start] already shifted above
+                        y_end   = clean_data[p_end, channel]   # clean_data[p_end] is outside stim, unshifted
+                        clean_data[p_start:p_end, channel] = np.linspace(y_start, y_end, p_end - p_start)
+                self.data = clean_data
 
 
     def load(self, data_path, shank, downsample, normalize,invert, channels=None):
@@ -260,11 +326,14 @@ class read_data():
         #     return 
         # channels=[24,20,23,27,25,21,22,26,28,16,19,31,29,17,18,30,15,3,0,12,14,2,1,13,11,7,4,8,10,6,5,9]
         if channels is None:
-            channels=range(self.channel_num)
-            self.channels=channels
+                channels=range(self.channel_num)
+                self.channels=channels
+        else:
+            if self.remove_artifacts and self.name in lists_sessions.light_on:
+                self.channels.append(32)
         # channels=channels[shank*8-8:shank*8]
       
-        raw_data = self.load_dat(data_path, channels, numSamples=self.numSamples)
+        raw_data = self.load_dat(data_path, self.channels, numSamples=self.numSamples)
 
         if hasattr(raw_data, 'shape'):
             self.data = self.clean(raw_data, downsample, normalize)
@@ -273,7 +342,7 @@ class read_data():
             self.load_annotations(self.annotation_path,self.name)
             self.load_ripple_times(data_path,invert)
             self.load_offline()
-            self.get_gt_annotations()
+            
 
     
 
@@ -362,11 +431,8 @@ class read_data():
             self.timestamps -= self.timestamps[0]
         self.duration=self.timestamps[-1]
 
-        if self.channel_num == 40:
+        if 32 in self.channels:
             if hasattr(self, 'data'):
-                if 32 not in self.channels:
-                    print("⚠️ TTL channel (32) not loaded, cannot extract TTL signal.")
-                    return
                 ttl_channel = np.where(np.array(self.channels) == 32)[0][0]
                 ttl_signal = self.data[:, ttl_channel]
             else:
@@ -410,7 +476,6 @@ class read_data():
                 self.from_data.light_stim=self.ripples_in_chunk(ttl_times,self.start,self.numSamples,self.fs,self.fs_conv_fact)
     
     def _check_data(self):
-
         if self.annotated.ripples_GT is None:
             print("⚠️ No ground truth annotations loaded.")
         else:
