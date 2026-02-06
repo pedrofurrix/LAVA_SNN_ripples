@@ -43,7 +43,17 @@ if __name__ == "__main__":
 #                  "2025-09-24_11-34-51",
 #                  "2025-09-25_11-21-53",
 #                  "2025-09-25_12-52-22",})
-    session_set=lists_sessions.extra_sessions
+    session_set=    {"Calb_251209_160255",
+            "Calb_251210_115904",
+            "Calb_251210_121141",
+            "Calb_251210_122327",
+            "Calb_251210_162849",
+            "Calb_251210_164150",
+            "Calb_251210_165332",
+            "Calb_251211_104316",
+            "Calb_251211_105518",
+            "Calb_251211_110650",
+                } 
     channel_sessions=lists_sessions.channel_sessions
     run_inference(
             prefix,

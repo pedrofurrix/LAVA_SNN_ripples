@@ -51,11 +51,9 @@ class liset_tk_extra():
         self.data_path=os.path.join(data_path,name)
 
         if shank is None:
-            if "Calbai32" in name:
-                shank=4
-            elif "PV01" in name:
-                shank=2
-
+            shank=lists_sessions.shank_sessions[name]
+            
+        self.shank=shank
         # Set the verbose
         self.verbose = verbose
         self.numSamples = numSamples

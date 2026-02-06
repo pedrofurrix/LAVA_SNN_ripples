@@ -1,4 +1,44 @@
 @echo off 
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_15f --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_15f --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_15f --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_15f --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11b --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11b --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11b --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11b --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_13f --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_13f --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_13f --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_13f --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_9f --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_9f --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_9f --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_9f --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_12b --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_12b --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_12b --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_12b --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13b --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13b --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13b --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13b --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_7 --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_7 --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_7 --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_7 --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13f --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13f --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13f --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix updnb4ds_100_13f --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix adapt20_3b --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix adapt20_3b --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix adapt20_3b --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix adapt20_3b --adapt 2
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11f --adapt 0
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11f --adapt 120
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11f --adapt 20
+C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_11f --adapt 2
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_14b --adapt 0
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_14b --adapt 120
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_14b --adapt 20
@@ -7,5 +47,6 @@ C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_16b --adapt 120
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_16b --adapt 20
 C:/Users/NCN/miniconda3/envs/lava_snn_ripples/python.exe c:/Users/NCN/Documents/PedroFelix/LAVA_SNN_ripples/snnTorch/generalization_madrid/batchrun.py --prefix dsb4updn_median_200_16b --adapt 2
+
 pause
 
