@@ -6,7 +6,7 @@ import sys
 ROOT_DIR=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if ROOT_DIR not in os.sys.path:
     sys.path.append(ROOT_DIR)
-import liset_tk.lists_sessions as lists_sessions
+import liset_data_reader.lists_sessions as lists_sessions
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate trained SNN model for ripple detection.")

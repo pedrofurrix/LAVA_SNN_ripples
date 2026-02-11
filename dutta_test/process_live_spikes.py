@@ -12,9 +12,11 @@ if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
 from dutta_test.process_signal import load_experimental_data
-import liset_tk.lists_sessions as lists_sessions
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
+import liset_data_reader.lists_sessions as lists_sessions
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
+
+
 def compute_metrics_single_channel(
     spikes_ms, 
     ripples_ms, 
@@ -165,7 +167,7 @@ def process_live_results(
             try:
                 # Suppress stdout from load_experimental_data if verbose
                 # sys.stdout = open(os.devnull, 'w') 
-                _, ripples = load_experimental_data(
+                _, ripples,duration_s = load_experimental_data(
                     data_path_extra,
                     session,
                     channel=channel,
@@ -180,7 +182,7 @@ def process_live_results(
         else:
             try:
                 # sys.stdout = open(os.devnull, 'w') 
-                _, ripples = load_experimental_data(
+                _, ripples,duration_s = load_experimental_data(
                     data_path_original,
                     session,
                     channel=channel,
@@ -198,7 +200,11 @@ def process_live_results(
         else:
             # Ripples are in 30kHz samples. Convert to ms.
             ripples_ms = ripples / 30.0
-            
+        if session in lists_sessions.start_on_40: # Only consider ripples starting after 40s (40000ms)
+            # Only consider ripples starting after 40s (40000ms)
+            ripples_ms = ripples_ms[ripples_ms[:, 0] >= 40000]
+            spikes=spikes[spikes >= 40000]
+        
         # Compute metrics
         tp, fp, fn, latencies = compute_metrics_single_channel(
             spikes, 
@@ -216,6 +222,8 @@ def process_live_results(
         
         print(f"  TP: {tp}, FP: {fp}, FN: {fn} -> F1: {f1:.4f}")
         
+        duration_min= duration_s / 60 if duration_s else None
+
         results.append({
             "Session": session,
             "Channel": channel,
@@ -228,7 +236,8 @@ def process_live_results(
             "F1": f1,
             "Mean_Latency": mean_latency,
             "Num_Spikes": len(spikes),
-            "Num_Ripples": len(ripples_ms)
+            "Num_Ripples": len(ripples_ms),
+            "Duration_min":duration_min
         })
         
     df = pd.DataFrame(results)

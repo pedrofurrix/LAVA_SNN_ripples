@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 def up_down_channel(signal,threshold,downsampled_fs,refractory=0,initial_value=None,return_value=False):
     # Define parameters
@@ -131,3 +132,70 @@ def calculate_threshold(signal,downsampled_fs,window_size,sample_ratio,scaling_f
     threshold=scaling_factor*np.mean(sorted_variation[:chosen])
         
     return threshold
+
+def cliffs_delta(u_stat, n_A, n_B):
+     # Compute_cliff_delta:
+    U1 = u_stat
+    U2 = n_A * n_B - U1
+
+    # Cliff’s delta must use U1 (vals_A vs vals_B)
+    cliffs_d = (U1 - U2) / (n_A * n_B)
+    # Interpretation (Romano et al., 2006)
+    abs_d = abs(cliffs_d)
+    if abs_d < 0.147:
+        effect = "Negligible"
+    elif abs_d < 0.33:
+        effect = "Small"
+    elif abs_d < 0.474:
+        effect = "Medium"
+    else:
+        effect = "Large"
+        
+    # print(f"Cliff's Delta: {cliffs_d:.3f} ({effect})")
+
+    return (cliffs_d,effect)
+
+def barplot_annotate_brackets(num1, num2, data, center, height, ax, yerr=None, dh=.05, barh=.05, fs=None, maxasterix=None):
+    """ 
+    Annotate barplot with p-values. 
+    Adapted from the provided script.
+    """
+    if type(data) is str:
+        text = data
+    else:
+        if data > 0.05:
+          return
+        text = ''
+        p = .05
+        while data < p:
+            text += '*'
+            p /= 10.
+            if maxasterix and len(text) == maxasterix:
+                break
+        if len(text) == 0:
+            text = 'n. s.'
+
+    lx, ly = center[num1], height[num1]
+    rx, ry = center[num2], height[num2]
+
+    if yerr:
+        ly += yerr[num1]
+        ry += yerr[num2]
+
+    ax_y0, ax_y1 = plt.gca().get_ylim()
+    dh *= (ax_y1 - ax_y0)
+    barh *= (ax_y1 - ax_y0)
+
+    y = max(ly, ry) + dh
+
+    barx = [lx, lx, rx, rx]
+    bary = [y, y+barh, y+barh, y]
+    mid = ((lx+rx)/2, y+barh)
+
+    ax.plot(barx, bary, c='black')
+
+    kwargs = dict(ha='center', va='bottom')
+    if fs is not None:
+        kwargs['fontsize'] = fs
+
+    ax.text(*mid, text, **kwargs)

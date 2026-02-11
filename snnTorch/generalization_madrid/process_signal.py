@@ -1,7 +1,7 @@
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
 import os
-from liset_tk.signal_aid import bandpass_filter
+from liset_data_reader.signal_aid import bandpass_filter
 from snnTorch.generalization_madrid.utils import *
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -35,7 +35,10 @@ def load_experimental_data(path,name, downsample = False, normalize = True, numS
             ripples = None
         if verbose:
             print(f"Loaded {len(ripples)} ground truth ripples.")
-    return filtered_signal, ripples
+    if load_data:
+        return filtered_signal, ripples
+    else:
+        return None, ripples,liset.duration if hasattr(liset,'duration') else None
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 
 

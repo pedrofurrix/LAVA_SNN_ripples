@@ -1,17 +1,17 @@
-from liset_paper import liset_paper as liset_tk
+from liset_data_reader.liset_paper import liset_paper
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 from signal_aid import bandpass_filter
 
-parent= r"C:\__NeuroSpark_Liset_Dataset__\neurospark_mat\extra_liset"  # Modify this to your data path folder
+parent= r"C:\PedroFelix\Download_from_paper" # Modify this to your data path folder
 datasets=os.listdir(parent)
 datasets = [d for d in datasets if not d.startswith('.') and not d.startswith('~')]
 print("Datasets found:", datasets)
 
 dataset=os.path.join(parent, datasets[0])
 print("Loading dataset:", dataset)
-liset=liset_tk(dataset, shank=1, downsample=False, start=0, verbose=False)
+liset=liset_paper(dataset, shank=1, downsample=False, start=0, verbose=False)
 print("Liset data shape:", liset.data.shape)
 numsamples=liset.data.shape[0]
 print("Dataset loaded:", dataset)

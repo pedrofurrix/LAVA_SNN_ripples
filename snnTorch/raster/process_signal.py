@@ -1,6 +1,6 @@
-from liset_tk.read_data import read_data
+from liset_data_reader.read_data import read_data
 # from liset_paper import liset_paper
-from liset_tk.signal_aid import bandpass_filter
+from liset_data_reader.signal_aid import bandpass_filter
 from snnTorch.raster.utils import calculate_threshold, up_down_channel, extract_spikes_downsample
 from snnTorch.raster.visualization import plot_offline_detections
 from datetime import datetime

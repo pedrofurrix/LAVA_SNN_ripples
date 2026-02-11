@@ -11,10 +11,10 @@ ROOT_DIR = os.path.abspath(os.path.join(curr_dir, os.pardir))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
-from liset_test.process_signal import load_experimental_data
-import liset_tk.lists_sessions as lists_sessions
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
+from liset_data_reader.process_signal import load_experimental_data
+import liset_data_reader.lists_sessions as lists_sessions
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
 
 def compute_metrics_single_channel(
     spikes_ms, 
@@ -166,7 +166,7 @@ def process_live_results(
             try:
                 # Suppress stdout from load_experimental_data if verbose
                 # sys.stdout = open(os.devnull, 'w') 
-                _, ripples = load_experimental_data(
+                _, ripples,duration_s = load_experimental_data(
                     data_path_extra,
                     session,
                     channel=[channel-1], # Pass as list, 0-indexed
@@ -181,10 +181,10 @@ def process_live_results(
         else:
             try:
                 # sys.stdout = open(os.devnull, 'w') 
-                _, ripples = load_experimental_data(
+                _, ripples,duration_s = load_experimental_data(
                     data_path_original,
                     session,
-                    channel=channel,
+                    channel=[channel-1],
                     load_data=False, 
                     verbose=False,
                     data_reader=read_data
@@ -201,6 +201,12 @@ def process_live_results(
             ripples_ms = ripples / 30.0
         print(type(spikes), np.array(spikes).dtype, np.array(spikes).shape)    
         spikes=spikes[:,0] if len(spikes.shape)>1 else spikes
+
+        if session in lists_sessions.start_on_40: # Only consider ripples starting after 40s (40000ms)
+            # Only consider ripples starting after 40s (40000ms)
+            ripples_ms = ripples_ms[ripples_ms[:, 0] >= 40000]
+            spikes=spikes[spikes >= 40000]
+            
         # Compute metrics
         tp, fp, fn, latencies = compute_metrics_single_channel(
             spikes, 
@@ -217,7 +223,7 @@ def process_live_results(
         mean_latency = np.mean(latencies) if latencies else np.nan
         
         print(f"  TP: {tp}, FP: {fp}, FN: {fn} -> F1: {f1:.4f}")
-        
+        duration_min= duration_s / 60 if duration_s else None
         results.append({
             "Session": session,
             "Channel": channel,
@@ -230,7 +236,8 @@ def process_live_results(
             "F1": f1,
             "Mean_Latency": mean_latency,
             "Num_Spikes": len(spikes),
-            "Num_Ripples": len(ripples_ms)
+            "Num_Ripples": len(ripples_ms),
+            "Duration_min": duration_min
         })
         
     df = pd.DataFrame(results)

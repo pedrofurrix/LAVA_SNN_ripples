@@ -11,9 +11,9 @@ if ROOT_DIR not in os.sys.path:
     sys.path.append(ROOT_DIR)
 
 from snnTorch.utils.start_net import Net
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
-from liset_tk.lists_sessions import *
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
+from liset_data_reader.lists_sessions import *
 from process_signal import load_experimental_data, spikify_signal
 import json
 from tqdm import tqdm  

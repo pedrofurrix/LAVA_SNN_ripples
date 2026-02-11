@@ -15,11 +15,11 @@ ROOT_DIR= os.path.abspath(os.path.join(curr_dir, os.pardir, os.pardir))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
-import liset_tk.lists_sessions as lists_sessions
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
+import liset_data_reader.lists_sessions as lists_sessions
 from snnTorch.generalization_madrid.process_signal import load_experimental_data, ripple_band_power_trace,spikify_signal
-from liset_tk.signal_aid import bandpass_filter
+from liset_data_reader.signal_aid import bandpass_filter
 
 def exponential_func(x, a, b):
     """ Exponential curve: a * exp(b * x) """
@@ -442,6 +442,10 @@ def run_power_analysis():
 
                         channel = data['channel']
                         spikes_ms = np.array(data['spikes'])
+                        
+                        if session in lists_sessions.start_on_40:
+                            spikes_ms=spikes_ms[spikes_ms>=40000] # Start on 40s for some sessions with no annotations at the beginning
+                        
                         if session in lists_sessions.extra_sessions:
                             
                             # Load Signal

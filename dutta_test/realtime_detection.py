@@ -19,9 +19,9 @@ import sys
 curr_dir=os.path.dirname(os.path.abspath(__file__))
 par_dir=os.path.dirname(curr_dir)
 sys.path.insert(0, par_dir)
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
-import liset_tk.lists_sessions as lists_sessions
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
+import liset_data_reader.lists_sessions as lists_sessions
 import dutta_test.ripple_filtering as ripple_filtering
 from  dutta_test.process_signal import *
 

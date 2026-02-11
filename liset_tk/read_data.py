@@ -87,7 +87,8 @@ class read_data():
             self.load(self.oe_path, shank, downsample = downsample, normalize=normalize,invert=invert, channels=channels)
             self.artifact_removal()
         else:
-            self.load_only_ripples(self.oe_path,invert=invert)    
+            self.load_only_ripples(self.oe_path,invert=invert)
+            self.duration=self.get_duration(self.oe_path)    
         
         self.get_gt_annotations() # so that it's already done with the artifact removal (if needed)
 
@@ -95,7 +96,31 @@ class read_data():
         if self.verbose:
             print(f"✅ Loading complete!- session {name}")
 
-        
+    def get_duration(self,path):
+        """
+        Get the duration of the data in seconds.
+
+        Parameters:
+        - path (str): Path to the directory containing the .dat file.
+
+        Returns:
+        - duration (float): Duration of the data in seconds.
+        """
+        try:
+            list_dir=os.listdir(path)
+            file=list_dir[self.recording_node] # Record Node 0 or 1 - #TODO: make it more robust and see if it isn't better to have 0...
+            record_file=os.path.join(path,file,"experiment1","recording1","continuous")
+            list_2=os.listdir(record_file)
+            folder=os.path.join(record_file,list_2[0])
+            filename=os.path.join(folder,"continuous.dat")
+            self.file_len = os.path.getsize(filename=filename)
+            self.file_samples = self.file_len // (self.channel_num * 2)
+            duration = self.file_samples / self.original_fs
+            return duration
+        except:
+            if self.verbose:
+                print('.dat file not in path')
+            return False          
 
     def load_only_ripples(self,path,invert=False):
         try:
@@ -326,11 +351,11 @@ class read_data():
         #     return 
         # channels=[24,20,23,27,25,21,22,26,28,16,19,31,29,17,18,30,15,3,0,12,14,2,1,13,11,7,4,8,10,6,5,9]
         if channels is None:
-                channels=range(self.channel_num)
-                self.channels=channels
+            channels=range(self.channel_num)
+            self.channels=channels
         else:
             if self.remove_artifacts and self.name in lists_sessions.light_on:
-                self.channels.append(32)
+                self.channels.append(32) if 32 not in self.channels else None
         # channels=channels[shank*8-8:shank*8]
       
         raw_data = self.load_dat(data_path, self.channels, numSamples=self.numSamples)
@@ -694,26 +719,6 @@ class RippleEvents():
             self.snn_predicts = convert(self.snn_predicts-self.offset)
         if isinstance(self.light_stim, np.ndarray) and self.light_stim.size > 0:
             self.light_stim = convert(self.light_stim)
-
-
-
-if __name__ == "__main__":
-    import lists_sessions
-    data_path=r"E:\Madrid_tests"
-    name="2025-09-22_17-55-26"#
-    try:
-        session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
-    except Exception as e:
-        print(f"⚠️ Skipping {name} - invalid format: {e}")
-
-
-    invert = session_date >= 24
-
-    channel=lists_sessions.channel_sessions.get(name, None)
-    liset=read_data(data_path, name, downsample=1250, normalize=False, invert=invert,offset=0.215,load_data=True,channels=[channel-1])
-    # print(liset.offline_detections[:10]/liset.fs)
-    liset.plot_offline(ch=[0,],offset=0.3,filtered=(100,250), extend=0.5, title=f'Session: {name}', window=None)
-
 
 
 # data_path=r"D:\Madrid_tests"

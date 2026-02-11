@@ -5,12 +5,12 @@ curr_dir=os.path.dirname(os.path.abspath(__file__))
 par_dir=os.path.dirname(curr_dir)
 sys.path.insert(0, par_dir)
 
-from liset_tk.load_data import *
-from liset_tk.read_data import *
-from liset_tk.liset_tk_extra import liset_tk_extra
-import liset_tk.lists_sessions as lists_sessions
+from liset_data_reader.load_data import *
+from liset_data_reader.read_data import *
+from liset_data_reader.liset_tk_extra import liset_tk_extra
+import liset_data_reader.lists_sessions as lists_sessions
 from liset_test.process_signal import *
-from liset_tk.format_predictions import *
+from liset_data_reader.format_predictions import *
 
 import tensorflow.keras.backend as K
 import tensorflow.keras as kr

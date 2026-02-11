@@ -167,6 +167,19 @@ shank_sessions={
     "Calb_251211_110650": 4
 }
 
+start_on_40={    
+    "Calb_251209_160255",
+    "Calb_251210_115904",
+    "Calb_251210_121141",
+    "Calb_251210_122327",
+    "Calb_251210_162849",
+    "Calb_251210_164150",
+    "Calb_251210_165332",
+    "Calb_251211_104316",
+    "Calb_251211_105518",
+    "Calb_251211_110650",
+} 
+
 channels_shank=[24,20,23,27,25,21,22,26, 28,16,19,31,29,17,18,30, 15,3,0,12,14,2,1,13, 11,7,4,8,10,6,5,9]
 
 
@@ -194,5 +207,5 @@ for session in annotated_sessions:
     else:
         sessions_after_24.add(session)
 
-Ripple_sessions.update(extra_sessions)
-annotated_sessions.update(extra_sessions)
+# Ripple_sessions.update(extra_sessions)
+# annotated_sessions.update(extra_sessions)
