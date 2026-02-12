@@ -11,7 +11,7 @@ ROOT_DIR = os.path.abspath(os.path.join(curr_dir, os.pardir))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
-from liset_data_reader.process_signal import load_experimental_data
+from process_signal import load_experimental_data
 import liset_data_reader.lists_sessions as lists_sessions
 from liset_data_reader.read_data import read_data
 from liset_data_reader.liset_tk_extra import liset_tk_extra

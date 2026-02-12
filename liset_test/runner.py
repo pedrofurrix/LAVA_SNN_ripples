@@ -15,7 +15,7 @@ from liset_data_reader.format_predictions import *
 import tensorflow.keras.backend as K
 import tensorflow.keras as kr
 
-def run_detection_cnn(threshold,path,sessions,channels_sessions):
+def run_detection_cnn(threshold,path_original,path_extra,sessions,channels_sessions):
     curr_dir=os.path.dirname(os.path.abspath(__file__))
     overlapping = True
     window_size = 0.0128
@@ -39,11 +39,11 @@ def run_detection_cnn(threshold,path,sessions,channels_sessions):
         channel=channels_sessions.get(session,None)-1
         if session in lists_sessions.extra_sessions:
             print(f"Skipping extra session {session}.")
-            data,_=load_experimental_data(path,session,downsample=downsample,normalize=True,channel=None,data_reader=liset_tk_extra) # None to load all channels from the shank
+            data,_=load_experimental_data(path_extra,session,downsample=downsample,normalize=True,channel=None,data_reader=liset_tk_extra) # None to load all channels from the shank
         else:
             shank=channel//8
             channels=np.arange(shank*8,shank*8+8)
-            data,_=load_experimental_data(path,session,downsample=downsample,normalize=True,channel=channels,data_reader=read_data)
+            data,_=load_experimental_data(path_original,session,downsample=downsample,normalize=True,channel=channels,data_reader=read_data)
         print("Generating windows...", end=" ")
         if overlapping:    
             stride = 0.0064
@@ -70,11 +70,27 @@ def run_detection_cnn(threshold,path,sessions,channels_sessions):
 
         pred_times = pred_indexes / downsample
         print("Done!")
-        all_predictions[session] = {
+        
+        # Load existing predictions to append to them
+        if os.path.exists(pkl_path):
+            with open(pkl_path, "rb") as f:
+                saved_predictions = pkl.load(f)
+        else:
+            saved_predictions = {}
+            
+        saved_predictions[session] = {
             "pred_indexes": pred_indexes,
             "pred_times": pred_times,
         }
-        save_predictions(all_predictions, threshold)
+        
+        # Update the file immediately
+        with open(pkl_path, "wb") as f:
+            pkl.dump(saved_predictions, f, protocol=pkl.HIGHEST_PROTOCOL)
+        
+        # Update local cache as well (optional, but good for skipping logic)
+        all_predictions[session] = saved_predictions[session]
+
+    # save_predictions(all_predictions, threshold) # No longer needed outside loop
 
 def save_predictions(detections_dict: dict, threshold: float):
     save_path=os.path.dirname(os.path.abspath(__file__))
@@ -85,29 +101,32 @@ def save_predictions(detections_dict: dict, threshold: float):
         pkl.dump(detections_dict, f, protocol=pkl.HIGHEST_PROTOCOL)
 
 if __name__ == "__main__":
-    path=r"C:\PedroFelix\extra_data\original_data"
-    # session_set={"2025-09-22_17-55-26", #R
-    #             "2025-09-23_15-50-26", #R
-    #             "2025-09-24_10-24-40", #R
-    #             "2025-09-24_14-22-55", #H
-    #             "2025-09-24_15-13-10", #H
-    #             "2025-09-25_16-41-14"} #R
+    PATH_OG="C:\PedroFelix\Madrid_tests"
+    PATH_EXTRA=r"C:\PedroFelix\extra_data\original_data"
+    session_set={"2025-09-22_17-55-26", #R
+                "2025-09-23_15-50-26", #R
+                "2025-09-24_10-24-40", #R
+                "2025-09-24_14-22-55", #H
+                "2025-09-24_15-13-10", #H
+                "2025-09-25_16-41-14"} #R
 
     # # Extra
-    # #     session_set={"2025-09-24_16-29-07", #R   
-    # #             "2025-09-24_17-38-17",} #R 
-    # session_set.update({ 
-    #     "2025-09-24_16-29-07", #R   
-    #     "2025-09-24_17-38-17", #R 
-    #     "2025-09-22_17-42-27",
-    #     "2025-09-24_11-34-51",
-    #     "2025-09-25_11-21-53",
-    #     "2025-09-25_12-52-22",})
+    session_set.update({"2025-09-24_16-29-07", #R   
+                "2025-09-24_17-38-17",}) #R 
+    session_set.update({ 
+        "2025-09-24_16-29-07", #R   
+        "2025-09-24_17-38-17", #R 
+        "2025-09-22_17-42-27",
+        "2025-09-24_11-34-51",
+        "2025-09-25_11-21-53",
+        "2025-09-25_12-52-22",
+        "2025-09-23_16-17-52"})
     
 
     # sessions=["2025-09-23_16-17-52"]
 
-    sessions=lists_sessions.extra_sessions
+    sessions_extra=lists_sessions.extra_sessions
+    session_set.update(sessions_extra)
     channel_sessions=lists_sessions.channel_sessions
     for threshold in [0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]:
-        run_detection_cnn(threshold,path,sessions,channel_sessions)
+        run_detection_cnn(threshold,PATH_OG,PATH_EXTRA,session_set,channel_sessions)

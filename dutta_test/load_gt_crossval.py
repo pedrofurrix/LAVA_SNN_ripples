@@ -50,7 +50,7 @@ class CrossValLoader:
             
             self.GT[session] = np.array(merged_spikes)
 class RippleNet_GT(CrossValLoader):
-    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\RippleNet\test_madrid\predictions", model= "ripplenet_bidirectional_best_random_seed456", threshold=0.8,tolerance=100.0):
+    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\RippleNet\test_madrid\predictions", model= "ripplenet_bidirectional_best_random_seed456", threshold=0.7,tolerance=100.0):
         super().__init__(data_dir, model=model, threshold=threshold, tolerance=tolerance)
         # Additional initialization code specific to RippleNET can go here
     def load_ground_truth(self):
@@ -85,7 +85,7 @@ class RippleNet_GT(CrossValLoader):
 
 
 class RipplAI_GT(CrossValLoader):
-    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\rippl-AI\detections", model= "LSTM_5", threshold=0.3,tolerance=100.0):
+    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\rippl-AI\detections", model= "LSTM_5", threshold=0.4,tolerance=100.0):
         super().__init__(data_dir, model=model, threshold=threshold, tolerance=tolerance)
         # Additional initialization code specific to RippleNET can go here
     
@@ -158,7 +158,7 @@ class LisetCNN_GT(CrossValLoader):
         self.detections=ground_truth
 
 class Dutta_GT(CrossValLoader):
-    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\dutta_test", model= None, threshold=5.0,tolerance=100.0):
+    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\dutta_test", model= None, threshold=7.0,tolerance=100.0):
         super().__init__(data_dir, model=model, threshold=threshold, tolerance=tolerance)
         # Additional initialization code specific to RippleNET can go here
     
@@ -190,7 +190,7 @@ class Dutta_GT(CrossValLoader):
 
 
 class SNN_GT(CrossValLoader):
-    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\snnTorch\generalization_madrid\spikes", model= "updnb4ds_100_13f", threshold=20,tolerance=100.0):
+    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\snnTorch\generalization_madrid\spikes", model= "dsb4updn_median_200_12b", threshold=20,tolerance=100.0):
         super().__init__(data_dir, model=model, threshold=threshold,tolerance=tolerance)
         # Additional initialization code specific to RippleNET can go here
     

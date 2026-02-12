@@ -18,7 +18,8 @@ if ROOT_DIR not in sys.path:
 from liset_data_reader.read_data import read_data
 from liset_data_reader.liset_tk_extra import liset_tk_extra
 import liset_data_reader.lists_sessions as lists_sessions
-from snnTorch.generalization_madrid.process_signal import load_experimental_data, ripple_band_power_trace,spikify_signal
+from liset_data_reader.ripple_band_power import ripple_band_power_trace
+from snnTorch.generalization_madrid.process_signal import load_experimental_data,spikify_signal
 from liset_data_reader.signal_aid import bandpass_filter
 
 def exponential_func(x, a, b):
@@ -348,8 +349,8 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
         duration_s = (t1 - t0) / fs
         spike_rate = spike_number / duration_s if duration_s > 0 else 0
 
-        spikified_start=int((ev['ripple_start']//fs)*1000)
-        spikified_end=int((ev['ripple_end']//fs)*1000)
+        spikified_start=int((ev['ripple_start']/fs)*1000)
+        spikified_end=int((ev['ripple_end']/fs)*1000)
         spikified_within_event=spikified[spikified_start:spikified_end,:]
         spike_number_within_event=np.sum(spikified_within_event)
 
@@ -491,8 +492,8 @@ def run_power_analysis():
                         power_trace = ripple_band_power_trace(channel_data, liset.fs, smooth_ms=5, zscore=True,bandpass=(100,250))
                         
                         # Extract Events
-                        # ripples from load_experimental_data are in samples (30kHz)
-                        tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs)
+                        # ripples from load_experimental_data are in samples (30kHz) 
+                        tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs,fp_grouping_ms=100)
 
                         WINDOW_SAMP=int(WINDOW_MS * liset.fs / 1000)
                         # Extract Snippets
