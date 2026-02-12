@@ -444,8 +444,7 @@ def run_power_analysis():
                         channel = data['channel']
                         spikes_ms = np.array(data['spikes'])
                         
-                        if session in lists_sessions.start_on_40:
-                            spikes_ms=spikes_ms[spikes_ms>=40000] # Start on 40s for some sessions with no annotations at the beginning
+
                         
                         if session in lists_sessions.extra_sessions:
                             
@@ -466,6 +465,10 @@ def run_power_analysis():
                             except Exception as e:
                                 print(f"  Error loading data for {session}: {e}")
                                 continue
+
+                        if session in lists_sessions.start_on_40:
+                            spikes_ms=spikes_ms[spikes_ms>=40000] # Start on 40s for some sessions with no annotations at the beginning
+                            ripples=ripples[ripples[:,0]>=40*liset.fs] # Start on 40s for some sessions with no annotations at the beginning
                         channel_data = liset.data[:,0]
                         filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4) 
                         if filtered_signal is None or ripples is None:
@@ -493,7 +496,7 @@ def run_power_analysis():
                         
                         # Extract Events
                         # ripples from load_experimental_data are in samples (30kHz) 
-                        tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs,fp_grouping_ms=100)
+                        tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs,fp_grouping_ms=100, extra_tolerance_ms=20)
 
                         WINDOW_SAMP=int(WINDOW_MS * liset.fs / 1000)
                         # Extract Snippets
