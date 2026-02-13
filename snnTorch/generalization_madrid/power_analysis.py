@@ -284,7 +284,7 @@ def extract_power_snippets(power_trace, events, event_type, window_samp, look_ar
             
     return snippets
 
-def extract_properties(raw_signal,spikified,session,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0): 
+def extract_properties(raw_signal,spikified,session,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0,duration_std=3): 
     look_around=int(look_around_ms*fs//1000)
     max_idx = len(power_trace)
     window_pts = int((window_ms / 1000) * fs)
@@ -298,11 +298,29 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
                 center_idx = ev['spike_samp']
                 start_l = max(0, center_idx - look_around)
                 end_l = min(max_idx, center_idx + look_around)
+                # find duration
                 snippet_around = power_trace[start_l:end_l] if end_l > start_l else []
-
                 if len(snippet_around) > 0:
                     rel_idx = np.argmax(snippet_around)
+                    max_power = snippet_around[rel_idx]
                     center_idx = start_l + rel_idx
+                    
+                    threshold = max_power / duration_std
+                    above_threshold = power_trace >= threshold
+                    # Find continuous regions above threshold
+                    diff = np.diff(above_threshold.astype(int))
+                    starts = np.where(diff == 1)[0] + 1
+                    ends = np.where(diff == -1)[0]
+                    if above_threshold[0]:
+                        starts = np.concatenate([[0], starts])
+                    if above_threshold[-1]:
+                        ends = np.concatenate([ends, [len(above_threshold)]])
+                    for s, e in zip(starts, ends):
+                        if s <= center_idx < e:
+                            ev['ripple_start']=s
+                            ev['ripple_end']=e
+                            break
+
             else:
                 # TP or FN: Find peak power in ripple interval
                 r_start = int(ev['ripple_start'])

@@ -16,7 +16,7 @@ class CrossValLoader:
         # Code to load ground truth data for cross-validation
         pass
 
-    def refine_GTs(self, tolerance_ms=100.0):
+    def refine_GTs(self, tolerance_ms=100.0): # TODO: Check this function - might want to change it a bit...
         """
         Merges spikes/events that are closer than tolerance_ms into a single event 
         (taking the first timestamp of the burst).
