@@ -9,3 +9,6 @@ dutta_test/spikes/*.pkl
 /liset_tk/figures/pngs
 /dutta_test/figures
 /snnTorch/generalization_madrid/data
+/snnTorch/raster/figures
+/snnTorch/analysis/figures
+/snnTorch/raster/__pycache__

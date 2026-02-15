@@ -1,4 +1,5 @@
 from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
 # from liset_paper import liset_paper
 from liset_data_reader.signal_aid import bandpass_filter
 from snnTorch.raster.utils import calculate_threshold, up_down_channel, extract_spikes_downsample
@@ -6,30 +7,68 @@ from snnTorch.raster.visualization import plot_offline_detections
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
+def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
+                           start = 0, verbose=True, channel=None,
+                          load_data=True,data_reader=read_data):
+    
+    liset=data_reader(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
+                           start = start, verbose=verbose,load_data=load_data,channels=[channel-1])
 
+    filtered_signal = None
+    if load_data:
+        if liset.data.shape[1]>1:
+            print("⚠️More than one channel loaded, please select a single channel.")
+        channel_data= liset.data[:].reshape(-1)
+        filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
+    
+    if hasattr(liset,'annotated') and hasattr(liset.annotated,'ripples_GT'):
+        ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
+    elif hasattr(liset,'ripples_GT'):
+        ripples=liset.ripples_GT
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
+    if load_data:
+        return filtered_signal, ripples
+    else:
+        return None, ripples,liset.duration if hasattr(liset,'duration') else None
+    
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, original_fs=30000,channel=None,
-                           invert=False,offset=0.16,load_data=True,visualize=False,):
-    
-    try:
-        session_date = datetime.strptime(name.split('_')[0], "%Y-%m-%d").day
-    except Exception as e:
-        print(f"⚠️ Skipping {name} - invalid format: {e}")
-        return None
+                           invert=False,offset=0.16,load_data=True,visualize=False,data_reader=read_data):
 
-    # determine invert rule
-    invert = session_date >= 24
-
-    liset=read_data(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
-                           start = start, verbose=verbose, original_fs=original_fs,channel_num=None,
-                           invert=invert,offset=offset,load_data=load_data)
+    liset=data_reader(path,name, downsample = downsample, normalize = normalize, numSamples = numSamples, 
+                           start = start, verbose=verbose,load_data=load_data,channels=[channel-1])
     
-    channel_data=liset.data[:,channel-1]
-    filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
-    ripples=liset.annotated.ripples_GT
+    filtered_signal = None
+    if load_data:
+        if liset.data.shape[1]>1:
+            print("⚠️More than one channel loaded, please select a single channel.")
+        channel_data= liset.data[:].reshape(-1)
+        filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
+    
+    if hasattr(liset,'annotated') and hasattr(liset.annotated,'ripples_GT'):
+        ripples=liset.annotated.ripples_GT #original frequency - 30000 Hz
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
+    elif hasattr(liset,'ripples_GT'):
+        ripples=liset.ripples_GT
+        if len(ripples)==0:
+            ripples = None
+        if verbose:
+            print(f"Loaded {len(ripples)} ground truth ripples.")
+
     if visualize:
-        plot_offline_detections(liset,ch=channel, filtered=[100,250], title="Filtered Signal with Ground Truth Ripples",
+        plot_offline_detections(liset,ch=0, filtered=[100,250], title="Filtered Signal with Ground Truth Ripples",
                                  window=None, plot_offline=False,plot_light=False,plot_predicted=False)
+        
     return filtered_signal, ripples
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 
