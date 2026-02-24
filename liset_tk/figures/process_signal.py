@@ -1,13 +1,20 @@
-from liset_tk.read_data import read_data
-from liset_tk.liset_tk_extra import liset_tk_extra
+from liset_data_reader.read_data import read_data
+from liset_data_reader.liset_tk_extra import liset_tk_extra
 import os
-from liset_tk.signal_aid import bandpass_filter
+from liset_data_reader.signal_aid import bandpass_filter
 from snnTorch.generalization_madrid.utils import *
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
 from scipy.signal import butter, filtfilt, hilbert
+
+def highpass_filter(signal, fs, highpass=100, order=4):
+    nyquist = 0.5 * fs
+    normal_cutoff = highpass / nyquist
+    b, a = butter(order, normal_cutoff, btype='high', analog=False)
+    filtered_signal = filtfilt(b, a, signal)
+    return filtered_signal
 
 def load_experimental_data(path,name, downsample = False, normalize = True, numSamples = False, 
                            start = 0, verbose=True, channel=None,
@@ -131,61 +138,70 @@ def spikify_signal(
 
         return spk, thr
 
+def reconstruct_signal_from_spikes(spikes, thresholds, adapt_threshold, fs_spikes, 
+                                   scaling_factor=1.0, # Not actually used if factor is passed, but kept for signature
+                                   factor=30, 
+                                    time_max=20,
+                                overlap=0.5,         # Downsampling factor used in spikify
+                                   original_fs=30000, 
+                                   highpass=100):
+   
+    N = len(spikes)
+    reconstructed = np.zeros(N)
 
-def ripple_band_power_trace(signal, fs, bandpass=(100, 250), smooth_ms=10, log_power=False,zscore=False):
-    """
-    Compute continuous ripple-band power over time.
+    # Convert to array if it isn't one (upfront)
+    thresholds_arr = np.array(thresholds)
+    step= int(original_fs * overlap * time_max) 
 
-    Parameters
-    ----------
-    signal : np.ndarray
-        1D LFP trace.
-    fs : float
-        Sampling frequency (Hz).
-    ripple_band : tuple
-        Ripple frequency range (e.g., (120, 250)).
-    smooth_ms : float
-        Window for moving average smoothing (in milliseconds).
-    log_power : bool
-        If True, return log10(power) instead of linear power.
+    if adapt_threshold:
 
-    Returns
-    -------
-    power_trace : np.ndarray
-        Ripple-band power time series (same length as signal).
-    """
-
-    # Bandpass filter
-    # nyq = fs / 2
-    # b, a = butter(4, [bandpass[0]/nyq, bandpass[1]/nyq], btype='band')
-    # filtered = filtfilt(b, a, signal)
-    filtered=signal  # Already filtered
-    # Hilbert transform to get analytic envelope
-    analytic = hilbert(filtered)
-    envelope = np.abs(analytic)
-
-    # Compute power
-    power = envelope ** 2
-    if log_power:
-        power = np.log10(power + 1e-12)
-
-     # ----- Optional z-score normalization -----
-    if zscore:
-        mu = np.mean(power)
-        sigma = np.std(power)
-        if sigma > 0:
-            power = (power - mu) / sigma
+        # Ensure thresholds is a list or array
+        thresholds_arr = np.array(thresholds)
+        
+        # original indices
+        orig_indices = np.arange(N) * 30 # since factor=30 in spikify - 30kHz -> 1kHz
+        
+        if step is None:
+            # For safety, use 0 if fail.
+            thr_indices = np.zeros(N, dtype=int)
         else:
-            power = power - mu   # avoid division by zero
+            thr_indices = (orig_indices // step).astype(int)
+        
+        # Clip to valid range
+        thr_indices = np.clip(thr_indices, 0, len(thresholds_arr) - 1)
+        
+        # Now expand thresholds to size N
+        current_thresholds = thresholds_arr[thr_indices]
+        
+    else:
+        # Fixed threshold (single value broadcasted)
+        # Handle case where thresholds might be a single-element list or scalar
+        if thresholds_arr.ndim > 0 and thresholds_arr.size > 0:
+            val = thresholds_arr[0]
+        else:
+            # Scalar fallback
+            val = float(thresholds_arr) if thresholds_arr.size==1 else 0.0
             
-    # 4 Smooth (optional)
-    if smooth_ms > 0:
-        win_samples = int(fs * smooth_ms / 1000)
-        if win_samples > 1:
-            kernel = np.ones(win_samples) / win_samples
-            power = np.convolve(power, kernel, mode='same')
+        current_thresholds = np.full(N, val)
 
-    return power
+    # -----------------------------------------------
+    # Vectorized reconstruction using cumsum
+    # -----------------------------------------------
+    # reconstructed[t] = reconstructed[t-1] + (UP[t] - DOWN[t]) * thr[t]
+    # => reconstructed = cumsum( (UP - DOWN) * thr )
+    
+    ups = spikes[:, 0]
+    dns = spikes[:, 1]
+    
+    changes = (ups - dns) * current_thresholds
+    reconstructed = np.cumsum(changes)
+
+    if highpass:
+        # Avoid filter artifacts if signal is too short
+        if len(reconstructed) > 3 * fs_spikes / highpass:
+             reconstructed = highpass_filter(reconstructed, fs=fs_spikes, highpass=highpass)
+             
+    return reconstructed
 
 def plot_signal_spikes(
     signal,

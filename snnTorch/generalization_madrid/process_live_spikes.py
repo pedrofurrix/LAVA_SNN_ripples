@@ -250,7 +250,6 @@ if __name__ == "__main__":
     SPIKES_ROOT = os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "spikes")
     DATA_PATH_ORIGINAL = r"C:\PedroFelix\Madrid_tests" # Update this if different
     DATA_PATH_EXTRA = r"C:\PedroFelix\extra_data\original_data" # Update this if different
-    OUTPUT_FILE = os.path.join(SPIKES_ROOT, "all_networks_metrics.csv")
     
     print(f"Searching for spike files in: {SPIKES_ROOT}")
     
@@ -275,6 +274,11 @@ if __name__ == "__main__":
                 net_name = re.sub(r'_adapt\d+$', '', net_name) if match else net_name
 
                 # Process
+                tolerance=20
+                max_detection_offset=100
+                fp_grouping_window=100
+                extra_tolerance=100
+
                 try:
                     df = process_live_results(
                         pkl_path,
@@ -293,6 +297,7 @@ if __name__ == "__main__":
                     print(f"Failed to process {file}: {e}")
                     import traceback
                     traceback.print_exc()
+    OUTPUT_FILE = os.path.join(SPIKES_ROOT, f"all_networks_metrics_{tolerance}ms_{max_detection_offset}ms_{fp_grouping_window}ms_{extra_tolerance}ms.csv")
 
     if all_dfs:
         final_df = pd.concat(all_dfs, ignore_index=True)
