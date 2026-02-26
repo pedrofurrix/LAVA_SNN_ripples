@@ -8,6 +8,8 @@ from tqdm import tqdm
 import re
 from scipy.signal import periodogram
 from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Add path to project root
 curr_dir = os.path.dirname(os.path.abspath(__file__))
@@ -400,9 +402,110 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
             "Spike_Number": spike_number,
             "Spike_Rate": spike_rate,
             "Spike_Number_within_Event": spike_number_within_event,
-            "Spike_Rate_within_Event": spike_rate_within_event
+            "Spike_Rate_within_Event": spike_rate_within_event,
+            "Event_ID":idx
         })
     return results
+
+def z_score_all(df, metrics=None):
+    """
+    Z-scores specific columns in the DataFrame.
+    Returns a copy to avoid SettingWithCopy warnings.
+    """
+    df_out = df.copy()
+    for col in metrics:
+        if col in df_out.columns:
+            mean_val = df_out[col].mean()
+            std_val = df_out[col].std()
+            if std_val != 0:
+                df_out[col] = (df_out[col] - mean_val) / std_val
+            else:
+                df_out[col] = 0
+    return df_out
+
+def calculate_covariance_matrix(df, metrics):
+    """
+    Calculates the covariance matrix for the specified metrics in the DataFrame.
+    """
+    # Drop NaNs before covariance to avoid errors
+    data = df[metrics].dropna().values
+    cov_matrix = np.cov(data, rowvar=False)
+    return cov_matrix
+
+def pca_from_cov(cov, sort=True):
+    """
+    Perform PCA given a covariance matrix.
+    Returns eigenvalues and eigenvectors.
+    """
+    # Eigen-decomposition (covariance is symmetric → use eigh)
+    eigvals, eigvecs = np.linalg.eigh(cov)
+
+    if sort:
+        idx = np.argsort(eigvals)[::-1]
+        eigvals = eigvals[idx]
+        eigvecs = eigvecs[:, idx]
+
+    return eigvals, eigvecs
+
+def project_data(df, metrics, eigvecs):
+    """
+    Project the Z-scored data onto the Principal Components.
+    PC_scores = Data_matrix * Eigenvectors
+    """
+    data = df[metrics].dropna().values
+    projected = np.dot(data, eigvecs)
+    
+    # Return as DataFrame for easy plotting
+    # Naming cols PC1, PC2, ...
+    cols = [f"PC{i+1}" for i in range(eigvecs.shape[1])]
+    projected_df = pd.DataFrame(projected, columns=cols, index=df.dropna(subset=metrics).index)
+    
+    # Join back with metadata
+    result = df.dropna(subset=metrics).copy()
+    for col in cols:
+        result[col] = projected_df[col]
+        
+    return result
+
+def plot_evr(evr, title_suffix=""):
+    plt.figure(figsize=(6, 4))
+    plt.plot(np.arange(1, len(evr)+1), evr/sum(evr), 'o-', linewidth=2)
+    plt.xlabel('Principal Component')
+    plt.ylabel('Explained Variance Ratio')
+    plt.title(f'Scree Plot {title_suffix}')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+def plot_pca_scatter(df_projected, color_by, title="PCA Projection",evrs=None):
+    """
+    Scatter plot of PC1 vs PC2, colored by 'color_by'.
+    """
+    plt.figure(figsize=(8, 6))
+    
+    sns.scatterplot(
+        data=df_projected, 
+        x="PC1", 
+        y="PC2", 
+        hue=color_by, 
+        alpha=0.7,
+        palette="viridis"
+    )
+    percents=evrs*100/sum(evrs) if evrs is not None else 0
+    plt.title(title)
+    plt.xlabel(f"PC1 ({percents[0]:.1f}%)" if evrs is not None else "PC1")
+    plt.ylabel(f"PC2 ({percents[1]:.1f}%)" if evrs is not None else "PC2")
+    plt.grid(True, alpha=0.3)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+def plot_loadings(eigvecs, metrics_to_use):
+    # Also plot Loading Matrix (Eigenvectors) to understand PCs
+    plt.figure(figsize=(10, 5))
+    sns.heatmap(eigvecs, annot=True, fmt=".2f", yticklabels=metrics_to_use, xticklabels=[f"PC{i+1}" for i in range(len(metrics_to_use))])
+    plt.title(f"PCA Loadings ")
+    plt.show()
 
 def run_power_analysis():
     # Configuration
