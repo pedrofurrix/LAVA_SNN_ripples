@@ -299,8 +299,8 @@ if __name__ == "__main__":
                     print(f"Failed to process {file}: {e}")
                     import traceback
                     traceback.print_exc()
-    OUTPUT_FILE = os.path.join(SPIKES_ROOT, f"all_networks_metrics_{tolerance}ms_{max_detection_offset}ms_{fp_grouping_window}ms_{extra_tolerance}ms.csv")
-
+    # OUTPUT_FILE = os.path.join(SPIKES_ROOT, f"all_networks_metrics_{tolerance}ms_{max_detection_offset}ms_{fp_grouping_window}ms_{extra_tolerance}ms.csv")
+    OUTPUT_FILE = os.path.join(SPIKES_ROOT, f"all_networks_metrics.csv")
     if all_dfs:
         final_df = pd.concat(all_dfs, ignore_index=True)
     
