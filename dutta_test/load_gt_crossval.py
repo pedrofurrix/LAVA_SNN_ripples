@@ -188,6 +188,50 @@ class Dutta_GT(CrossValLoader):
                                 ground_truth[session] = spikes_ms
         self.detections=ground_truth
 
+class Buzsaki_GT(CrossValLoader):
+    def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\buzsaki_test", model= None, threshold=6.0,fall_off=4.0,tolerance=100.0):
+        self.fall_off=fall_off
+        super().__init__(data_dir, model=model, threshold=threshold, tolerance=tolerance)
+        
+
+    def load_ground_truth(self):
+        ground_truth= {}
+         # Walk through all subdirectories
+        for root, dirs, files in os.walk(self.data_dir):
+            for file in files:
+                if file.endswith(".pkl") and "detections" in file:
+                    pkl_path = os.path.join(root, file)
+                    # print(f"\nFound results file: {file}")
+                    
+                    # Determine network name from filename or folder
+                    # e.g. detections_thr_3.0.pkl
+                    net_name = file.replace('.pkl', '')
+                    
+                    # Use regex to find thr_X.X suffix
+                    match = re.search(r'thr_([\d\.]+)(?:_([\d\.]+))?', net_name)
+                    
+                    threshold = 0.0
+                    fall_off = None
+                    
+                    if match:
+                        threshold = float(match.group(1))
+                        if match.group(2):
+                            fall_off = float(match.group(2))
+                    threshold = float(match.group(1)) if match else 0
+                    if threshold == self.threshold and fall_off==self.fall_off:
+                            print(f"Loading detections for threshold {threshold}, fall_off {fall_off}")
+                            with open(pkl_path, 'rb') as f:
+                                predictions = pickle.load(f)
+                            for session, data in predictions.items():
+                                detections = data.get('detection_times', [])
+                                if len(detections) > 0 and isinstance(detections[0], dict):
+                                    spikes = np.array([d['time_s'] * 1000 for d in detections]) # Convert s to ms
+                                else:
+                                    spikes = np.array(detections) * 1000 # Convert s to ms
+                                ground_truth[session] = spikes  
+        self.detections=ground_truth
+
+
 
 class SNN_GT(CrossValLoader):
     def __init__(self, data_dir= r"C:\Users\NCN\Documents\PedroFelix\LAVA_SNN_ripples\snnTorch\generalization_madrid\spikes", model= "dsb4updn_median_200_12b", threshold=20,tolerance=100.0):

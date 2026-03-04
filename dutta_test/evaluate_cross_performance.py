@@ -176,7 +176,8 @@ Loaders={
 "RippleNet_GT":RippleNet_GT,
 "RipplAI_GT":RipplAI_GT,
 "LisetCNN_GT":LisetCNN_GT,
-"Dutta_GT":Dutta_GT
+"Dutta_GT":Dutta_GT,
+"Buzsaki_GT":Buzsaki_GT,
 }
  
 if __name__=="__main__":

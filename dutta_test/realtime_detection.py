@@ -167,11 +167,11 @@ def detect_and_save_sessions(
         
         if session in extra_sessions:
             data,ripples=load_experimental_data(path,session, downsample = False, normalize = True, numSamples = False, 
-                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=liset_tk_extra)
+                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=liset_tk_extra) # TODO: try without normalizing.
 
         else:
             data,ripples=load_experimental_data(path,session, downsample = False, normalize = True, numSamples = False, 
-                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=read_data)        
+                           start = 0, verbose=True, channel=channel,load_data=True,data_reader=read_data)       # TODO: try without normalizing.
         out = process_and_detect(data, fs=fs, alpha=alpha, **process_kwargs)
         # store compact serializable summary
         results[session] = {
