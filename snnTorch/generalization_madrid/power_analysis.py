@@ -492,6 +492,7 @@ def plot_pca_scatter(df_projected, color_by, title="PCA Projection",evrs=None):
         palette="viridis"
     )
     percents=evrs*100/sum(evrs) if evrs is not None else 0
+    
     plt.title(title)
     plt.xlabel(f"PC1 ({percents[0]:.1f}%)" if evrs is not None else "PC1")
     plt.ylabel(f"PC2 ({percents[1]:.1f}%)" if evrs is not None else "PC2")
