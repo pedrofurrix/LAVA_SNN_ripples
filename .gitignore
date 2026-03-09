@@ -13,3 +13,4 @@ dutta_test/spikes/*.pkl
 /snnTorch/analysis/figures
 /snnTorch/raster/__pycache__
 /buzsaki_test/spikes
+/dutta_test/figures
