@@ -14,3 +14,6 @@ dutta_test/spikes/*.pkl
 /snnTorch/raster/__pycache__
 /buzsaki_test/spikes
 /dutta_test/figures
+/snnTorch/generalization_madrid/figures
+/snnTorch/generalization_madrid/figures
+/snnTorch/generalization_madrid/figures

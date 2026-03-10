@@ -7,7 +7,7 @@ def buzsaki(lfp, fs, config=None, threshold=5, fall_off=2, sws_mask=None, light_
     """
     Detect ripples using the method described in Stark et al. (2014) / Roux et al. (2017) / Oliva et al. (2020).
     -> Stark threshold of 5 SD for detection, 2 SD for expansion, 15 ms min duration, 80-250 BP, LP = 52.5 Hz.
-    -> Roux uses 2.5 SD., 2 SD., 20 ms min duration, 80-250 BP, LP = 52.5 Hz.
+    -> Roux uses 5 SD., 2 SD., 20 ms min duration, 80-250 BP, LP = 52.5 Hz.
     -> Oliva et al. (2020) use 4 SD, 1 SD, 15 ms min duration, 100-300 BP, LP = 55 Hz.
 
     Algorithm:
