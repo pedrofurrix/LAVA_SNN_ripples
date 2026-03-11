@@ -10,7 +10,7 @@ from scipy.signal import periodogram
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from scipy.stats import skew,kurtosis
 # Add path to project root
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR= os.path.abspath(os.path.join(curr_dir, os.pardir, os.pardir))
@@ -286,7 +286,52 @@ def extract_power_snippets(power_trace, events, event_type, window_samp, look_ar
             
     return snippets
 
-def extract_properties(raw_signal,spikified,session,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0,duration_std=3): 
+def skew_curve(signal, fs=30000):
+    """
+    signal : 1D numpy array
+    dt     : sampling interval
+    """
+    norm_signal = (signal - np.mean(signal)) / np.std(signal)
+    dt=1
+
+    # first derivative
+    dx = np.gradient(norm_signal, dt)
+
+    # second derivative
+    ddx = np.gradient(dx, dt)
+
+    # curvature
+    curvature = np.abs(ddx) / (1 + dx**2)**1.5
+
+    # skewness of curvature
+    skewcurve = skew(curvature)
+
+    return skewcurve
+
+def kurtosis_curve(signal, fs=30000):
+    """
+    signal : 1D numpy array
+    dt     : sampling interval
+    """
+    norm_signal = (signal - np.mean(signal)) / np.std(signal)
+    dt=1
+    # dt = 1 / fs
+
+    # first derivative
+    dx = np.gradient(norm_signal, dt)
+
+    # second derivative
+    ddx = np.gradient(dx, dt)
+
+    # curvature
+    curvature = np.abs(ddx) / (1 + dx**2)**1.5
+
+    # kurtosis of curvature
+    kurtcurve = kurtosis(curvature)
+
+    return kurtcurve
+
+def extract_properties(raw_signal,spikified,session,filtered=None,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0,duration_std=3): 
     look_around=int(look_around_ms*fs//1000)
     max_idx = len(power_trace)
     window_pts = int((window_ms / 1000) * fs)
@@ -379,8 +424,9 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
         spike_rate_within_event = spike_number_within_event / event_duration_s if event_duration_s > 0 else 0
         
         chunk = raw_signal[t0:t1]
-                # A) Preferred Frequency
-
+        chunk_filtered = filtered[t0:t1] if filtered is not None else None
+        
+        # A) Preferred Frequency
         pref_freq = calculate_preferred_frequency(chunk, fs, band=(70,400),min_resolution=min_resolution)
 
         # B) <100 Hz Contribution
@@ -389,6 +435,11 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
         # C) Entropy
         entropy = calculate_spectral_entropy(chunk, fs)
 
+        # D) Skewness of Curvature
+        skewness_curvature = skew_curve(chunk_filtered, fs)
+
+        # E) Kurtosis of Curvature
+        kurtosis_curvature = kurtosis_curve(chunk_filtered, fs)
         results.append({
             "Session": session,
             "Network": network,
@@ -403,6 +454,8 @@ def extract_properties(raw_signal,spikified,session,power_trace=None,events=None
             "Spike_Rate": spike_rate,
             "Spike_Number_within_Event": spike_number_within_event,
             "Spike_Rate_within_Event": spike_rate_within_event,
+            "Skewness_Curvature": skewness_curvature,
+            "Kurtosis_Curvature": kurtosis_curvature,
             "Event_ID":idx
         })
     return results
@@ -625,9 +678,9 @@ def run_power_analysis():
                         tp_snips = extract_power_snippets(power_trace, tp_ev, 'TP', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
                         fp_snips = extract_power_snippets(power_trace, fp_ev, 'FP', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
                         fn_snips = extract_power_snippets(power_trace, fn_ev, 'FN', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
-                        results_tp=extract_properties(channel_data, spikified, session, power_trace=power_trace, events=tp_ev, event_type='TP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
-                        results_fp=extract_properties(channel_data, spikified, session, power_trace=power_trace, events=fp_ev, event_type='FP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
-                        results_fn=extract_properties(channel_data, spikified, session, power_trace=power_trace, events=fn_ev, event_type='FN',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
+                        results_tp=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=tp_ev, event_type='TP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
+                        results_fp=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=fp_ev, event_type='FP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
+                        results_fn=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=fn_ev, event_type='FN',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
                         results_all.extend(results_tp)
                         results_all.extend(results_fp)
                         results_all.extend(results_fn)
