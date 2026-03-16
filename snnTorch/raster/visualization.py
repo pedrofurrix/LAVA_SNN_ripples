@@ -132,6 +132,8 @@ def plot_offline_detections(liset,ch=None, offset=0, filtered=None, extend=0.5, 
     handles, labels = ax.get_legend_handles_labels()
     unique = dict(zip(labels, handles))
     ax.legend(unique.values(), unique.keys())
-    ax.grid(True, alpha=0.3)
+    ax.grid(False, alpha=0.3)
+    ax.spines[['top', 'right','bottom', 'left']].set_visible(False)
     plt.tight_layout()
     plt.show(block=False)
+    
