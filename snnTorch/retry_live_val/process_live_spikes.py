@@ -153,7 +153,7 @@ def process_live_results(
         try:
             # Suppress stdout from load_experimental_data if verbose
             # sys.stdout = open(os.devnull, 'w') 
-            _, ripples = load_experimental_data(
+            _, ripples,duration_s = load_experimental_data(
                 path=path_data,
                 channel=channel,
                 load_data=False, 

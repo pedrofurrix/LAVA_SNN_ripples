@@ -1,7 +1,6 @@
-# from liset_tk.read_data import read_data
-from liset_tk.liset_paper import liset_paper
+from liset_data_reader.liset_paper import liset_paper
 import os
-from liset_tk.signal_aid import bandpass_filter
+from liset_data_reader.signal_aid import bandpass_filter
 from snnTorch.generalization_madrid.utils import *
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -40,7 +39,9 @@ def load_experimental_data(path, downsample = False, normalize = True, numSample
         ripples[:, :2] = ripples[:, :2] - n_start
         filtered_signal = filtered_signal[int(n_start):int(n_end)]
         # print(f"  Applied fraction slicing: {fraction}, total_samples: {total_samples}, new ripples shape: {ripples.shape}")
-    return filtered_signal, ripples
+        
+    duration_s=liset.duration
+    return filtered_signal, ripples,duration_s
 
 # Double Checked - should work okay and return a spikified signal in the shape [n_samples(ms), 2 (UP/DN)] 
 
