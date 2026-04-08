@@ -8,18 +8,13 @@ if ROOT_DIR not in os.sys.path:
     sys.path.append(ROOT_DIR)
 import liset_data_reader.lists_sessions as lists_sessions
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Evaluate trained SNN model for ripple detection.")
-    parser.add_argument("--prefix", type=str, default="dsb4updn_median_200_15f", help="Prefix of the trained model file.")
-    parser.add_argument("--adapt", type=int, default=120, help="Adaptation parameter.")
-    return parser.parse_args()
+
 
 if __name__ == "__main__":
-    args = parse_args()
-
+    
     # Unpack args
-    prefix = args.prefix
-    adapt = args.adapt
+    prefix = "updnb4ds_100_7"
+    adapt = 20
 
     data_path=r"C:\PedroFelix\extra_data\original_data"
     
@@ -64,6 +59,6 @@ if __name__ == "__main__":
             session_set,
             channel_sessions=channel_sessions,
             adapt=adapt,
-            export_spikes=True,
+            export_spikes=False,
             seed=None)
     gc.collect()

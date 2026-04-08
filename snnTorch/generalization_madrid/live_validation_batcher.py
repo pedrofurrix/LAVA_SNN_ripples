@@ -4,6 +4,7 @@ import torch
 from collections import deque
 from torch.utils.data import TensorDataset, DataLoader
 import pickle as pkl
+from codecarbon import EmissionsTracker
 
 import sys
 ROOT_DIR=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -13,7 +14,7 @@ if ROOT_DIR not in os.sys.path:
 from snnTorch.utils.start_net import Net
 from liset_data_reader.read_data import read_data
 from liset_data_reader.liset_tk_extra import liset_tk_extra
-from liset_data_reader.lists_sessions import *
+import liset_data_reader.lists_sessions as lists_sessions
 from process_signal import load_experimental_data, spikify_signal
 import json
 from tqdm import tqdm  
@@ -41,7 +42,8 @@ def run_inference(
 
     # Load network
     net = Net().to(device)
-    net_path = f"../out/{prefix}_trained_net_loss.pth"
+    net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "out", f"{prefix}_trained_net_loss.pth")
+    print(f"Loading model from: {net_path}")
     net.load_state_dict(torch.load(net_path, map_location=device))
     net.eval()
 
@@ -66,7 +68,7 @@ def run_inference(
         channel = channel_sessions.get(session, None)
         if channel is None:
             raise ValueError(f"No channel mapping provided for session {session}")
-        if session in extra_sessions:
+        if session in lists_sessions.extra_sessions:
             
             # Load signal + ripples
             filtered_signal, ripples = load_experimental_data(
@@ -131,6 +133,9 @@ def run_inference(
 
         net.reset_state()
 
+        # Track emissions for this session
+        tracker=EmissionsTracker(project_name="snn_ripple_inference", log_level="error")
+        tracker.start()
         # Run network
         with torch.no_grad():
             for step in range(total_steps):
@@ -202,6 +207,10 @@ def run_inference(
             "spikes": session_spikes,
         }
         print(f"Session {session} ended. F1: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, num spikes: {len(session_spikes)}")
+        
+        # Stop emissions tracker for this session and log results
+        tracker.stop()
+        print("Emissions for this session: {:.4f} kg CO2".format(tracker.final_emissions))
 
     if export_spikes:
         curr_dir=os.path.dirname(os.path.abspath(__file__))
