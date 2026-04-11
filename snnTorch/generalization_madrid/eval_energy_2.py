@@ -16,8 +16,7 @@ if ROOT_DIR not in os.sys.path:
     sys.path.append(ROOT_DIR)
 
 import liset_data_reader.lists_sessions as lists_sessions
-from snnTorch.utils.start_net import Net
-from snnTorch.utils.start_net_within_net import Net_P
+from snnTorch.utils.minimal_net import Net
 from liset_data_reader.read_data import read_data
 from liset_data_reader.liset_tk_extra import liset_tk_extra
 
@@ -48,7 +47,7 @@ def run_inference(
     refrac_period = 100 # in ms
 
     # Load network
-    net = Net_P().to(device)
+    net = Net().to(device)
     net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "out", f"{prefix}_trained_net_loss.pth")
     print(f"Loading model from: {net_path}")
     net.load_state_dict(torch.load(net_path, map_location=device))
@@ -133,16 +132,19 @@ def run_inference(
         net.reset_state()
 
         # Track emissions for this session
-        tracker=EmissionsTracker(project_name="snn_ripple_inference_minimal", log_level="error")
+        tracker=EmissionsTracker(project_name="snn_ripple_inference_minimal_2", log_level="error")
         tracker.start()
         # Run network
+        spks_out=[]
         with torch.no_grad():
-            spk_out=net(input_tensor)  # Add batch dimension
-        
+            for t in range(input_tensor.shape[1]):
+                input_t = input_tensor[:,t,:]
+                spk_out = net(input_t)
+                spks_out.append(spk_out)    
         # Stop emissions tracker for this session and log results
         tracker.stop()
         print("Emissions for this session: {:.4f} kg CO2".format(tracker.final_emissions))
-
+        print(f"{len(spks_out)} timesteps processed for session {session}.")
 if __name__ == "__main__":
     
     # Unpack args
