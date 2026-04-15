@@ -13,7 +13,8 @@ from liset_tk.format_predictions import *
 
 import tensorflow.keras.backend as K
 import tensorflow.keras as kr
-
+import tensorflow as tf 
 model = kr.models.load_model(os.path.join(curr_dir, "model"), compile=False)
 # model.compile(loss="binary_crossentropy", optimizer=optimizer)
 model.summary()
+print(tf.config.list_physical_devices('GPU'))

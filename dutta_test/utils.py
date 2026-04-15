@@ -206,3 +206,21 @@ def calculate_matched_pairs_effect_size_wilcoxon(x, y):
         effect = "Large"
         
     return rc, effect
+
+def holm_bonferroni(p_values, alpha=0.05):
+    p_values = np.asarray(p_values)
+    m = len(p_values)
+
+    sorted_indices = np.argsort(p_values)
+    sorted_pvals = p_values[sorted_indices]
+
+    adjusted = (m - np.arange(m)) * sorted_pvals
+    adjusted = np.maximum.accumulate(adjusted)   # enforce monotonicity
+    adjusted = np.clip(adjusted, 0, 1)
+
+    # reorder to original order
+    adjusted_pvals = np.empty_like(adjusted)
+    adjusted_pvals[sorted_indices] = adjusted
+
+    significant = adjusted_pvals <= alpha
+    return significant, adjusted_pvals
