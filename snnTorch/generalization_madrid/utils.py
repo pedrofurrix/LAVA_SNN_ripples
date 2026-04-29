@@ -350,3 +350,14 @@ def holm_bonferroni(p_values, alpha=0.05):
 
     significant = adjusted_pvals <= alpha
     return significant, adjusted_pvals
+
+def forceAspect(ax, aspect=1):
+    images = ax.get_images()
+    if images:
+        extent = images[0].get_extent()
+        ax.set_aspect(abs((extent[1] - extent[0]) / (extent[3] - extent[2])) / aspect)
+        return
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    if (x1 - x0) != 0 and (y1 - y0) != 0:
+        ax.set_aspect(abs((x1 - x0) / (y1 - y0)) / aspect)
