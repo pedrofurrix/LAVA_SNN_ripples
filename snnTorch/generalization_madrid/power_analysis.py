@@ -225,11 +225,49 @@ def extract_events(spikes_ms, ripples_samp, fs=30000, tolerance_ms=20, max_offse
             
     return tp_events, fp_events, fn_events
 
+def session_background_power(power_trace, fs, ripples, exclude_s=0.2, start_idx=0):
+    """
+    Background ripple-band power of a session: mean linear power after excluding
+    +/- exclude_s around every annotated ripple (same definition as Madrid_analysis
+    power_near_stim.session_baseline_power, without stims).
+    Detector spikes are NOT excluded, so the reference does not depend on the network.
+    start_idx: samples before it are excluded (unannotated start of start_on_40 sessions).
+    Returns (mean, fraction_of_samples_kept).
+    """
+    keep = np.ones(len(power_trace), dtype=bool)
+    keep[:start_idx] = False
+    pad = int(exclude_s * fs)
+    for start, end in np.asarray(ripples, dtype=int):
+        keep[max(0, start - pad):min(end + pad, len(keep))] = False
+    if not np.any(keep):
+        return np.nan, 0.0
+    return float(np.mean(power_trace[keep])), float(keep.mean())
+
+def power_event_bounds(power_trace, center_idx, threshold, max_samp):
+    """
+    Expands from center_idx while power_trace >= threshold (bounded to +/- max_samp).
+    Returns absolute (start, end) sample indices.
+    """
+    lo = max(0, center_idx - max_samp)
+    hi = min(len(power_trace), center_idx + max_samp)
+    below = power_trace[lo:hi] < threshold
+    c = center_idx - lo
+    left = np.where(below[:c])[0]
+    right = np.where(below[c:])[0]
+    start = lo + (left[-1] + 1 if len(left) else 0)
+    end = lo + c + (right[0] if len(right) else len(below) - c)
+    return start, end
+
 def extract_power_snippets(power_trace, events, event_type, window_samp, look_around_ms=50, FS=30000,center="peak"):
+    """
+    Returns the snippets and the index of each kept event in `events`
+    (= Event_Idx in extract_properties), so both tables can be joined on the event ID.
+    """
     snippets = []
+    snippet_ids = []
     max_idx = len(power_trace)
     look_around=int(look_around_ms*FS//1000)
-    for ev in events:
+    for ev_idx, ev in enumerate(events):
         center_idx = 0
         
         if center == "peak":
@@ -283,8 +321,9 @@ def extract_power_snippets(power_trace, events, event_type, window_samp, look_ar
         
         if start >= 0 and end <= max_idx:
             snippets.append(power_trace[start:end])
-            
-    return snippets
+            snippet_ids.append(ev_idx)
+
+    return snippets, snippet_ids
 
 def skew_curve(signal, fs=30000):
     """
@@ -331,8 +370,16 @@ def kurtosis_curve(signal, fs=30000):
 
     return kurtcurve
 
-def extract_properties(raw_signal,spikified,session,filtered=None,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0,duration_std=3): 
+def extract_properties(raw_signal,spikified,session,filtered=None,power_trace=None,events=None,event_type=None,center="peak",window_ms=100, fs=30000, look_around_ms=50,network=None, adapt=None,min_resolution=10.0,background=None,power_mean=0.0,power_std=1.0,duration_threshold=0.4,max_duration_ms=500):
+    """
+    power_trace: LINEAR ripple-band power (no z-score).
+    background:  session background power (session_background_power) -> dB features.
+    power_mean, power_std: session mean/std of power_trace -> legacy z-scored features.
+    FP boundaries: power stays above background + duration_threshold * (peak - background),
+    expanding from the peak (same rule as Madrid_analysis calculate_duration_power).
+    """
     look_around=int(look_around_ms*fs//1000)
+    max_duration_samp=int(max_duration_ms*fs//1000)
     max_idx = len(power_trace)
     window_pts = int((window_ms / 1000) * fs)
     half_win = window_pts // 2
@@ -351,22 +398,10 @@ def extract_properties(raw_signal,spikified,session,filtered=None,power_trace=No
                     rel_idx = np.argmax(snippet_around)
                     max_power = snippet_around[rel_idx]
                     center_idx = start_l + rel_idx
-                    
-                    threshold = max_power / duration_std
-                    above_threshold = power_trace >= threshold
-                    # Find continuous regions above threshold
-                    diff = np.diff(above_threshold.astype(int))
-                    starts = np.where(diff == 1)[0] + 1
-                    ends = np.where(diff == -1)[0]
-                    if above_threshold[0]:
-                        starts = np.concatenate([[0], starts])
-                    if above_threshold[-1]:
-                        ends = np.concatenate([ends, [len(above_threshold)]])
-                    for s, e in zip(starts, ends):
-                        if s <= center_idx < e:
-                            ev['ripple_start']=s
-                            ev['ripple_end']=e
-                            break
+
+                    # Duration: power above background + 40% of the excess power (peak - background)
+                    threshold = background + duration_threshold * (max_power - background)
+                    ev['ripple_start'], ev['ripple_end'] = power_event_bounds(power_trace, center_idx, threshold, max_duration_samp)
 
             else:
                 # TP or FN: Find peak power in ripple interval
@@ -440,12 +475,25 @@ def extract_properties(raw_signal,spikified,session,filtered=None,power_trace=No
 
         # E) Kurtosis of Curvature
         kurtosis_curvature = kurtosis_curve(chunk_filtered, fs)
+
+        # F) Ripple-band power over the same window (+/- window_ms/2 around center_idx)
+        chunk_power = power_trace[t0:t1]
+        peak_power_db = 10 * np.log10(np.max(chunk_power) / background)
+        mean_power_db = 10 * np.log10(np.mean(chunk_power) / background)
+        peak_power_z = (np.max(chunk_power) - power_mean) / power_std
+        mean_power_z = (np.mean(chunk_power) - power_mean) / power_std
         results.append({
             "Session": session,
             "Network": network,
             "Adapt": adapt,
             "Event_Idx": idx,
+            "Event_UID": f"{network}|{adapt}|{session}|{event_type}|{idx}",
             "Event_Type": event_type,
+            "Peak_Power_dB": peak_power_db,
+            "Mean_Power_dB": mean_power_db,
+            "Peak_Power_Z": peak_power_z,
+            "Mean_Power_Z": mean_power_z,
+            "Background_Power": background,
             "Duration_ms": event_duration_s * 1000,
             "Preferred_Freq": pref_freq,
             "Low_Freq_Contrib": low_100_contrib,
@@ -561,144 +609,155 @@ def plot_loadings(eigvecs, metrics_to_use):
     plt.title(f"PCA Loadings ")
     plt.show()
 
-def run_power_analysis():
+def run_power_analysis(networks_to_run=None, sessions_to_run=None, save=True):
     # Configuration
     SPIKES_ROOT = os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "spikes")
     DATA_ROOT=os.path.join(ROOT_DIR, "snnTorch", "generalization_madrid", "data")
     os.makedirs(DATA_ROOT, exist_ok=True)
-    DATA_PATH_ORIGINAL = r"C:\PedroFelix\Madrid_tests" # Update this if different
-    DATA_PATH_EXTRA = r"C:\PedroFelix\extra_data\original_data" # Update this if different
-    OUTPUT_FILE = os.path.join(SPIKES_ROOT, "power_analysis_results.pkl")
+    # First existing path is used
+    DATA_PATH_ORIGINAL = next((p for p in [r"C:\PedroFelix\Madrid_tests", r"E:\NCN\Madrid_tests"] if os.path.exists(p)), None)
+    DATA_PATH_EXTRA = next((p for p in [r"C:\PedroFelix\extra_data\original_data", r"E:\NCN\extra_data\original_data"] if os.path.exists(p)), None)
+    print(f"Data paths: {DATA_PATH_ORIGINAL} | {DATA_PATH_EXTRA}")
     center="peak"
     # Analysis parameters
     WINDOW_MS = 100 # +/- 100ms
     FS = 30000
     look_around_ms=50 # for peak centering of FPs
     min_resolution=2.0 # Hz
+    BASELINE_EXCLUDE_S = 0.2 # +/- around annotated ripples, excluded from the background power
+    NETWORKS_TO_RUN = networks_to_run # e.g. {"dsb4updn_median_200_12b"}; None -> all networks
 
-    SESSIONS_TO_EXCLUDE={        
+    SESSIONS_TO_EXCLUDE={
         "2025-09-24_17-38-17", # Barely any ripples (14 in total...)
         "2025-09-25_12-52-22", # Not a good session to detect ripples
         }
+    
     SESSIONS_TO_EXCLUDE.update(lists_sessions.HFO_sessions) # Exclude HFO Sessions...
     print(f"Searching for spike files in: {SPIKES_ROOT}")
-    
-    all_power_data = {} # Key: (Network, Adapt), Value: {'TP': [], 'FP': [], 'FN': []}
+
+    all_power_data = {} # Key: (Network, Adapt), Value: {session: {'TP': [], 'FP': [], 'FN': [], 'TP_idx': [], ...}}
     results_all=[]
-    # Walk through all subdirectories
+    # Collect spike files (adapt == 20 only)
+    network_spikes = {} # Key: (Network, Adapt), Value: {session: {'channel', 'spikes'}}
     for root, dirs, files in os.walk(SPIKES_ROOT):
         for file in files:
             if file.endswith("_spikes.pkl"):
-                pkl_path = os.path.join(root, file)
-                print(f"\nProcessing: {file}")
-                
                 # Determine network name and adapt
                 net_name = file.replace('_spikes.pkl', '')
                 match = re.search(r'_adapt(\d+)$', net_name)
                 adapt = int(match.group(1)) if match else 0
                 if adapt==20:
                     net_name_clean = re.sub(r'_adapt\d+$', '', net_name) if match else net_name
-                    
+                    if NETWORKS_TO_RUN is not None and net_name_clean not in NETWORKS_TO_RUN:
+                        continue
                     key = (net_name_clean, adapt)
-                    if key not in all_power_data:
-                        all_power_data[key] = {}
-                    
-                    # Load spikes
-                    with open(pkl_path, 'rb') as f:
-                        all_spikes = pickle.load(f)
-                    
-                    # Iterate over sessions
-                    for session, data in tqdm(all_spikes.items(), desc="Sessions"):
-                        all_power_data[key][session] = {'TP': [], 'FP': [], 'FN': []}
-                        if session in SESSIONS_TO_EXCLUDE:
-                            print(f"  Skipping excluded session: {session}")
-                            continue
-                        else:
-                            print(f"🔄Processing session: {session}")
+                    with open(os.path.join(root, file), 'rb') as f:
+                        network_spikes[key] = pickle.load(f)
+                    all_power_data[key] = {}
+                    print(f"Loaded: {file}")
 
-                        channel = data['channel']
-                        spikes_ms = np.array(data['spikes'])
-                        
+    # Iterate over sessions: the signal is loaded and processed once, then reused for every network
+    sessions = list(dict.fromkeys(s for spikes in network_spikes.values() for s in spikes))
+    if sessions_to_run is not None:
+        sessions = [s for s in sessions if s in sessions_to_run]
+    for session in tqdm(sessions, desc="Sessions"):
+        for key in network_spikes:
+            all_power_data[key][session] = {'TP': [], 'FP': [], 'FN': [], 'TP_idx': [], 'FP_idx': [], 'FN_idx': []}
+        if session in SESSIONS_TO_EXCLUDE:
+            print(f"  Skipping excluded session: {session}")
+            continue
+        else:
+            print(f"🔄Processing session: {session}")
 
-                        
-                        if session in lists_sessions.extra_sessions:
-                            
-                            # Load Signal
-                            try:
-                                liset=liset_tk_extra(data_path=DATA_PATH_EXTRA, name=session, downsample=False, scale_data=False,normalize=False, verbose=False,channels=[channel-1])
-                                ripples=liset.ripples_GT
-                              
-                            except Exception as e:
-                                print(f"  Error loading data for {session}: {e}")
-                                continue
-                        else: 
-                            # Load Signal
-                            try:
-                                liset=read_data(DATA_PATH_ORIGINAL, session, downsample=False, normalize=False, numSamples=False,
-                                               start=0, verbose=False,channels=[channel-1])
-                                ripples=liset.annotated.ripples_GT
-                            except Exception as e:
-                                print(f"  Error loading data for {session}: {e}")
-                                continue
+        channels = {spikes[session]['channel'] for spikes in network_spikes.values() if session in spikes}
+        if len(channels) > 1:
+            print(f"  ⚠️ Different channels across networks for {session}: {channels}, skipping.")
+            continue
+        channel = channels.pop()
 
-                        if session in lists_sessions.start_on_40:
-                            spikes_ms=spikes_ms[spikes_ms>=40000] # Start on 40s for some sessions with no annotations at the beginning
-                            ripples=ripples[ripples[:,0]>=40*liset.fs] # Start on 40s for some sessions with no annotations at the beginning
-                        channel_data = liset.data[:,0]
-                        filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4) 
-                        if filtered_signal is None or ripples is None:
-                            continue
+        if session in lists_sessions.extra_sessions:
+            # Load Signal
+            try:
+                liset=liset_tk_extra(data_path=DATA_PATH_EXTRA, name=session, downsample=False, scale_data=False,normalize=False, verbose=False,channels=[channel-1])
+                ripples=liset.ripples_GT
+            except Exception as e:
+                print(f"  Error loading data for {session}: {e}")
+                continue
+        else:
+            # Load Signal
+            try:
+                liset=read_data(DATA_PATH_ORIGINAL, session, downsample=False, normalize=False, numSamples=False,
+                               start=0, verbose=False,channels=[channel-1])
+                ripples=liset.annotated.ripples_GT
+            except Exception as e:
+                print(f"  Error loading data for {session}: {e}")
+                continue
 
-                        spikified, _ =spikify_signal(
-                                                filtered_signal,
-                                                fs=liset.fs,
-                                                time_max=20.0,
-                                                overlap=0.5,
-                                                adapt_threshold=True,
-                                                percentile=False,
-                                                window_size=0.10,
-                                                sample_ratio=0.25,
-                                                scaling_factor=1.0,
-                                                refractory=0,
-                                                factor=30,
-                                                initial_value=None,
-                                                verbose=False,
-                                                ripples=None,     # kept for compatibility but unused
-                                            )
-                        # Compute Power Trace
-                        # filtered_signal is already 100-250Hz
-                        power_trace = ripple_band_power_trace(channel_data, liset.fs, smooth_ms=5, zscore=True,bandpass=(100,250))
-                        
-                        # Extract Events
-                        # ripples from load_experimental_data are in samples (30kHz) 
-                        tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs,fp_grouping_ms=100, extra_tolerance_ms=20)
+        start_idx = 0
+        if session in lists_sessions.start_on_40:
+            start_idx = int(40*liset.fs) # Start on 40s for some sessions with no annotations at the beginning
+            ripples=ripples[ripples[:,0]>=start_idx]
+        channel_data = liset.data[:,0]
+        filtered_signal=bandpass_filter(channel_data, bandpass=[100,250], fs=liset.fs, order=4)
+        if filtered_signal is None or ripples is None:
+            continue
 
-                        WINDOW_SAMP=int(WINDOW_MS * liset.fs / 1000)
-                        # Extract Snippets
-                        tp_snips = extract_power_snippets(power_trace, tp_ev, 'TP', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
-                        fp_snips = extract_power_snippets(power_trace, fp_ev, 'FP', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
-                        fn_snips = extract_power_snippets(power_trace, fn_ev, 'FN', WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
-                        results_tp=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=tp_ev, event_type='TP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
-                        results_fp=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=fp_ev, event_type='FP',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
-                        results_fn=extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=fn_ev, event_type='FN',center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution)
-                        results_all.extend(results_tp)
-                        results_all.extend(results_fp)
-                        results_all.extend(results_fn)
-                        
-                        # Store (downsample to save space? maybe 1000Hz?)
-                        # Let's downsample by factor of 3 (30kHz -> 10kHz)
-                        factor = 3
-                        all_power_data[key][session]['TP'].extend([s[::factor] for s in tp_snips])
-                        all_power_data[key][session]['FP'].extend([s[::factor] for s in fp_snips])
-                        all_power_data[key][session]['FN'].extend([s[::factor] for s in fn_snips])
-                    
-                        print(f"✅Finished session: {session}. TP: {len(tp_snips)}, FP: {len(fp_snips)}, FN: {len(fn_snips)}")
+        spikified, _ =spikify_signal(
+                                filtered_signal,
+                                fs=liset.fs,
+                                time_max=20.0,
+                                overlap=0.5,
+                                adapt_threshold=True,
+                                percentile=False,
+                                window_size=0.10,
+                                sample_ratio=0.25,
+                                scaling_factor=1.0,
+                                refractory=0,
+                                factor=30,
+                                initial_value=None,
+                                verbose=False,
+                                ripples=None,     # kept for compatibility but unused
+                            )
+        # Compute Power Trace (linear, no z-score) and the session background
+        power_trace = ripple_band_power_trace(channel_data, liset.fs, smooth_ms=5, zscore=False,bandpass=(100,250))
+        background, bg_frac = session_background_power(power_trace, liset.fs, ripples, exclude_s=BASELINE_EXCLUDE_S, start_idx=start_idx)
+        if not np.isfinite(background) or background <= 0:
+            print(f"  ⚠️ {session}: no valid background power, skipping.")
+            continue
+        power_mean, power_std = float(np.mean(power_trace)), float(np.std(power_trace)) # legacy z-score
+        print(f"  Background power: {background:.3g} ({bg_frac*100:.1f}% of samples)")
+        WINDOW_SAMP=int(WINDOW_MS * liset.fs / 1000)
+        factor = 3 # Store snippets downsampled 30kHz -> 10kHz
+
+        for key, network_data in network_spikes.items():
+            if session not in network_data:
+                continue
+            net_name_clean, adapt = key
+            spikes_ms = np.array(network_data[session]['spikes'])
+            if session in lists_sessions.start_on_40:
+                spikes_ms=spikes_ms[spikes_ms>=40000]
+
+            # Extract Events
+            # ripples from load_experimental_data are in samples (30kHz)
+            tp_ev, fp_ev, fn_ev = extract_events(spikes_ms, ripples, fs=liset.fs,fp_grouping_ms=100, extra_tolerance_ms=20)
+
+            for event_type, events in [('TP', tp_ev), ('FP', fp_ev), ('FN', fn_ev)]:
+                # Snippets of power relative to background (linear ratio): average first, then convert to dB
+                snips, snip_ids = extract_power_snippets(power_trace / background, events, event_type, WINDOW_SAMP,center=center,look_around_ms=look_around_ms, FS=liset.fs)
+                all_power_data[key][session][event_type].extend([s[::factor].astype(np.float32) for s in snips])
+                all_power_data[key][session][f'{event_type}_idx'].extend(snip_ids)
+                results_all.extend(extract_properties(channel_data, spikified, session, filtered=filtered_signal, power_trace=power_trace, events=events, event_type=event_type,center=center,window_ms=WINDOW_MS, fs=liset.fs, look_around_ms=look_around_ms,network=net_name_clean, adapt=adapt, min_resolution=min_resolution, background=background, power_mean=power_mean, power_std=power_std))
+
+            print(f"  ✅{net_name_clean}: TP: {len(tp_ev)}, FP: {len(fp_ev)}, FN: {len(fn_ev)}")
+
+    if not save:
+        return pd.DataFrame(results_all), all_power_data
 
     # Save results
-    filename=f"power_analysis_results_center_{center}_{WINDOW_MS}ms.pkl"
-    filename_properties=f"power_analysis_properties_center_{center}_{WINDOW_MS}ms.csv"
+    filename=f"power_analysis_results_center_{center}_{WINDOW_MS}ms_dB.pkl"
+    filename_properties=f"power_analysis_properties_center_{center}_{WINDOW_MS}ms_dB.csv"
     df_results=pd.DataFrame(results_all)
-    
+
     OUTPUT_FILE = os.path.join(DATA_ROOT, filename)
     OUTPUT_FILE_PROPERTIES = os.path.join(DATA_ROOT, filename_properties)
     print(f"\nSaving properties results to {OUTPUT_FILE_PROPERTIES}...")
